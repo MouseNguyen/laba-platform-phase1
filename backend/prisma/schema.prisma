@@ -1,0 +1,141 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                    Int       @id @default(autoincrement())
+  email                 String    @unique
+  password_hash         String
+  full_name             String?
+  token_version         Int       @default(0)
+  email_verified_at     DateTime?
+  failed_login_attempts Int       @default(0)
+  lock_until            DateTime?
+  last_failed_attempt   DateTime?
+  
+  created_at            DateTime  @default(now())
+  updated_at            DateTime  @updatedAt
+  deleted_at            DateTime?
+
+  tokens                UserToken[]
+  user_roles            UserRole[]
+  user_branches         UserBranch[]
+
+  @@map("users")
+}
+
+model UserToken {
+  id                 Int       @id @default(autoincrement())
+  user_id            Int
+  refresh_token_hash String    @unique
+  device_hash        String
+  device_info        Json
+  
+  expires_at         DateTime
+  created_at         DateTime  @default(now())
+  revoked_at         DateTime?
+
+  user               User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([refresh_token_hash])
+  @@map("user_tokens")
+}
+
+model Role {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique
+  description String?
+  
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  deleted_at  DateTime?
+
+  user_roles       UserRole[]
+  role_permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          Int       @id @default(autoincrement())
+  slug        String    @unique
+  description String?
+  
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  deleted_at  DateTime?
+
+  role_permissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model UserRole {
+  user_id Int
+  role_id Int
+  
+  user    User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  role    Role @relation(fields: [role_id], references: [id], onDelete: Cascade)
+
+  @@id([user_id, role_id])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  role_id       Int
+  permission_id Int
+  
+  role          Role       @relation(fields: [role_id], references: [id], onDelete: Cascade)
+  permission    Permission @relation(fields: [permission_id], references: [id], onDelete: Cascade)
+
+  @@id([role_id, permission_id])
+  @@map("role_permissions")
+}
+
+model Branch {
+  id          Int       @id @default(autoincrement())
+  name        String
+  code        String?   @unique
+  address     String?
+  phone       String?
+  
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  deleted_at  DateTime?
+
+  user_branches UserBranch[]
+
+  @@map("branches")
+}
+
+model UserBranch {
+  user_id   Int
+  branch_id Int
+  
+  user      User   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  branch    Branch @relation(fields: [branch_id], references: [id], onDelete: Cascade)
+
+  @@id([user_id, branch_id])
+  @@map("user_branches")
+}
+
+model LandingContent {
+  id         Int      @id @default(autoincrement())
+  key        String
+  locale     String   @default("vi")
+  status     String   @default("draft") // draft, published, archived
+  sort_order Int      @default(0)
+  content    Json
+  
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@unique([key, locale])
+  @@map("landing_content")
+}
