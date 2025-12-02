@@ -27,16 +27,16 @@ export const configValidationSchema = Joi.object({
     CORS_ORIGIN: Joi.string().default('http://localhost:3000'),
 
     // Rate Limiting & Security
-    RATE_LIMIT_LOGIN_PER_USER: Joi.number().default(5),
-    RATE_LIMIT_LOGIN_PER_IP: Joi.number().default(10),
-    RATE_LIMIT_REGISTER_PER_IP: Joi.number().default(3),
-    ACCOUNT_LOCK_THRESHOLD: Joi.number().default(5),
-    ACCOUNT_LOCK_DURATION_MIN: Joi.number().default(15),
+    RATE_LIMIT_LOGIN_PER_USER: Joi.number().integer().min(1).default(5),
+    RATE_LIMIT_LOGIN_PER_IP: Joi.number().integer().min(1).default(10),
+    RATE_LIMIT_REGISTER_PER_IP: Joi.number().integer().min(1).default(3),
+    ACCOUNT_LOCK_THRESHOLD: Joi.number().integer().min(1).default(5),
+    ACCOUNT_LOCK_DURATION_MIN: Joi.number().integer().min(1).default(15),
 
     // Token Cleanup
-    TOKEN_CLEANUP_GRACE_DAYS: Joi.number().default(30),
-    TOKEN_CLEANUP_BATCH_SIZE: Joi.number().default(100),
+    TOKEN_CLEANUP_GRACE_DAYS: Joi.number().integer().min(0).default(30),
+    TOKEN_CLEANUP_BATCH_SIZE: Joi.number().integer().min(1).default(100),
 
     // Monitoring
-    ALERT_WEBHOOK_URL: Joi.string().optional().allow(''),
+    ALERT_WEBHOOK_URL: Joi.string().uri().optional().allow(''),
 });

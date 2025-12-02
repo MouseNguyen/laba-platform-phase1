@@ -14,13 +14,19 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { Request, Response } from 'express';
+import { AuthRateLimitService } from './auth-rate-limit.service';
 
 @Controller('auth')
 export class AuthController {
-    constructor(private authService: AuthService) { }
+    constructor(
+        private authService: AuthService,
+        private authRateLimitService: AuthRateLimitService,
+    ) { }
 
     @Post('register')
-    async register(@Body() registerDto: RegisterDto) {
+    async register(@Body() registerDto: RegisterDto, @Req() req: Request) {
+        const ip = this.authService.getClientIp(req);
+        await this.authRateLimitService.checkRegisterLimit(ip);
         return this.authService.register(registerDto);
     }
 
@@ -31,7 +37,9 @@ export class AuthController {
         @Req() req: Request,
         @Res({ passthrough: true }) res: Response,
     ) {
-        return this.authService.login(loginDto, req, res);
+        const ip = this.authService.getClientIp(req);
+        await this.authRateLimitService.checkLoginLimit(loginDto.email, ip);
+        return this.authService.login(loginDto, req, res, ip);
     }
 
     @Post('refresh')

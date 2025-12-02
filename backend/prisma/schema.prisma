@@ -17,30 +17,30 @@ model User {
   failed_login_attempts Int       @default(0)
   lock_until            DateTime?
   last_failed_attempt   DateTime?
-  
-  created_at            DateTime  @default(now())
-  updated_at            DateTime  @updatedAt
-  deleted_at            DateTime?
 
-  tokens                UserToken[]
-  user_roles            UserRole[]
-  user_branches         UserBranch[]
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
+
+  tokens        UserToken[]
+  user_roles    UserRole[]
+  user_branches UserBranch[]
 
   @@map("users")
 }
 
 model UserToken {
-  id                 Int       @id @default(autoincrement())
+  id                 Int    @id @default(autoincrement())
   user_id            Int
-  refresh_token_hash String    @unique
+  refresh_token_hash String @unique
   device_hash        String
   device_info        Json
-  
-  expires_at         DateTime
-  created_at         DateTime  @default(now())
-  revoked_at         DateTime?
 
-  user               User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  expires_at DateTime
+  created_at DateTime  @default(now())
+  revoked_at DateTime?
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@index([user_id])
   @@index([refresh_token_hash])
@@ -48,13 +48,13 @@ model UserToken {
 }
 
 model Role {
-  id          Int       @id @default(autoincrement())
-  name        String    @unique
+  id          Int     @id @default(autoincrement())
+  name        String  @unique
   description String?
-  
-  created_at  DateTime  @default(now())
-  updated_at  DateTime  @updatedAt
-  deleted_at  DateTime?
+
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
 
   user_roles       UserRole[]
   role_permissions RolePermission[]
@@ -63,13 +63,13 @@ model Role {
 }
 
 model Permission {
-  id          Int       @id @default(autoincrement())
-  slug        String    @unique
+  id          Int     @id @default(autoincrement())
+  slug        String  @unique
   description String?
-  
-  created_at  DateTime  @default(now())
-  updated_at  DateTime  @updatedAt
-  deleted_at  DateTime?
+
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
 
   role_permissions RolePermission[]
 
@@ -79,9 +79,9 @@ model Permission {
 model UserRole {
   user_id Int
   role_id Int
-  
-  user    User @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  role    Role @relation(fields: [role_id], references: [id], onDelete: Cascade)
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [role_id], references: [id], onDelete: Cascade)
 
   @@id([user_id, role_id])
   @@map("user_roles")
@@ -90,24 +90,24 @@ model UserRole {
 model RolePermission {
   role_id       Int
   permission_id Int
-  
-  role          Role       @relation(fields: [role_id], references: [id], onDelete: Cascade)
-  permission    Permission @relation(fields: [permission_id], references: [id], onDelete: Cascade)
+
+  role       Role       @relation(fields: [role_id], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permission_id], references: [id], onDelete: Cascade)
 
   @@id([role_id, permission_id])
   @@map("role_permissions")
 }
 
 model Branch {
-  id          Int       @id @default(autoincrement())
-  name        String
-  code        String?   @unique
-  address     String?
-  phone       String?
-  
-  created_at  DateTime  @default(now())
-  updated_at  DateTime  @updatedAt
-  deleted_at  DateTime?
+  id      Int     @id @default(autoincrement())
+  name    String
+  code    String? @unique
+  address String?
+  phone   String?
+
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
 
   user_branches UserBranch[]
 
@@ -117,25 +117,44 @@ model Branch {
 model UserBranch {
   user_id   Int
   branch_id Int
-  
-  user      User   @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  branch    Branch @relation(fields: [branch_id], references: [id], onDelete: Cascade)
+
+  user   User   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  branch Branch @relation(fields: [branch_id], references: [id], onDelete: Cascade)
 
   @@id([user_id, branch_id])
   @@map("user_branches")
 }
 
+enum LandingStatus {
+  draft
+  published
+  archived
+}
+
+enum StoryLinkTarget {
+  SELF
+  BLANK
+}
+
 model LandingContent {
-  id         Int      @id @default(autoincrement())
-  key        String
-  locale     String   @default("vi")
-  status     String   @default("draft") // draft, published, archived
-  sort_order Int      @default(0)
-  content    Json
-  
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
+  id                String          @id @default(uuid())
+  key               String
+  locale            String
+  status            LandingStatus
+  title             String
+  subtitle          String?
+  short_story       String
+  image_url         String?
+  image_mobile_url  String?
+  image_alt         String?
+  story_link        String?
+  story_link_target StoryLinkTarget @default(SELF)
+  sort_order        Int
+  is_active         Boolean         @default(true)
+  created_at        DateTime        @default(now())
+  updated_at        DateTime        @updatedAt
+  updated_by        Int? // tạm thời Int? để có thể tham chiếu User.id sau này nếu cần
 
   @@unique([key, locale])
-  @@map("landing_content")
+  @@map("landing_contents")
 }

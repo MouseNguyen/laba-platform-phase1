@@ -4,10 +4,12 @@ import {
     Injectable,
     Logger,
     UnauthorizedException,
+    HttpException,
+    HttpStatus,
 } from '@nestjs/common';
 import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
-    import { ConfigService } from '@nestjs/config';
+import { ConfigService } from '@nestjs/config';
 import * as argon2 from 'argon2';
 import * as crypto from 'crypto';
 import { RegisterDto } from './dto/register.dto';
@@ -16,6 +18,7 @@ import { User } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { Request, Response } from 'express';
 import { DeviceUtil } from './utils/device.util';
+import { SecurityLoggerService } from '../common/security-logger.service';
 
 @Injectable()
 export class AuthService {
@@ -26,7 +29,8 @@ export class AuthService {
         private readonly jwtService: JwtService,
         private readonly configService: ConfigService,
         private readonly prisma: PrismaService,
-    ) {}
+        private readonly securityLogger: SecurityLoggerService,
+    ) { }
 
     // --- REGISTER ---
     async register(registerDto: RegisterDto) {
@@ -48,10 +52,41 @@ export class AuthService {
     }
 
     // --- LOGIN ---
-    async login(loginDto: LoginDto, req: Request, res: Response) {
+    public getClientIp(req: Request): string {
+        const xff = req.headers['x-forwarded-for'];
+        if (typeof xff === 'string') {
+            return xff.split(',')[0].trim();
+        }
+        if (Array.isArray(xff)) {
+            return xff[0];
+        }
+        return (req.ip || req.connection.remoteAddress || '').toString();
+    }
+
+    async login(loginDto: LoginDto, req: Request, res: Response, ip: string) {
         const user = await this.usersService.findOne(loginDto.email);
         if (!user) {
+            // Delay to avoid timing attacks
+            await new Promise((resolve) => setTimeout(resolve, 200));
+            this.logger.warn('AUTH_LOGIN_FAIL', {
+                email: loginDto.email,
+                ip,
+                reason: 'User not found',
+            });
             throw new UnauthorizedException('Invalid credentials');
+        }
+
+        // Check lock
+        if (user.lock_until && user.lock_until > new Date()) {
+            this.logger.warn('AUTH_ACCOUNT_LOCKED', {
+                userId: user.id,
+                email: user.email,
+                lockUntil: user.lock_until,
+            });
+            throw new HttpException(
+                'Account is locked. Please try again later.',
+                423,
+            );
         }
 
         const isPasswordValid = await argon2.verify(
@@ -60,8 +95,12 @@ export class AuthService {
         );
 
         if (!isPasswordValid) {
+            await this.handleLoginFailure(user);
             throw new UnauthorizedException('Invalid credentials');
         }
+
+        // Reset lock
+        await this.resetLoginLock(user);
 
         // Generate tokens
         const accessToken = await this.generateAccessToken(user);
@@ -102,14 +141,25 @@ export class AuthService {
 
         // 1. Reuse Detection
         if (tokenRecord.revoked_at) {
+            const detail = {
+                userId: tokenRecord.user_id,
+                email: tokenRecord.user.email,
+                ip: this.getClientIp(req),
+                userAgent: req.headers['user-agent'] || 'unknown',
+                tokenId: tokenRecord.id,
+            };
+
             this.logger.warn(
                 `Token reuse detected for user ${tokenRecord.user_id}`,
+            );
+            this.securityLogger.logAuthEvent('SESSION_COMPROMISED', detail);
+            this.securityLogger.notifyAlertWebhook(
+                'SESSION_COMPROMISED',
+                detail,
             );
 
             // Revoke ALL tokens của user này (Kill switch)
             await this.revokeAll(tokenRecord.user_id);
-
-            // TODO: Có thể gửi alert webhook ở đây (ALERT_WEBHOOK_URL)
 
             throw new ForbiddenException({
                 message: 'Session compromised. Please login again.',
@@ -275,20 +325,92 @@ export class AuthService {
 
     private async hashPassword(password: string): Promise<string> {
         const memoryCost =
-            Number(this.configService.get('ARGON2_MEMORY_COST')) ||
-            19456;
+            Number(this.configService.get('ARGON2_MEMORY_COST')) || 19456;
         const timeCost =
             Number(this.configService.get('ARGON2_TIME_COST')) || 2;
         const parallelism =
-            Number(
-                this.configService.get('ARGON2_PARALLELISM'),
-            ) || 1;
+            Number(this.configService.get('ARGON2_PARALLELISM')) || 1;
 
         return argon2.hash(password, {
             type: argon2.argon2id,
             memoryCost,
             timeCost,
             parallelism,
+        });
+    }
+
+    private async handleLoginFailure(user: User): Promise<void> {
+        const now = new Date();
+
+        const threshold =
+            this.configService.get<number>('ACCOUNT_LOCK_THRESHOLD') ?? 5;
+        const baseLockMin =
+            this.configService.get<number>('ACCOUNT_LOCK_DURATION_MIN') ?? 15;
+
+        const lastFailed = user.last_failed_attempt;
+        let failedCount = user.failed_login_attempts ?? 0;
+
+        const windowMs = baseLockMin * 60_000;
+
+        if (!lastFailed || now.getTime() - lastFailed.getTime() > windowMs) {
+            // quá lâu không sai, reset counter
+            failedCount = 1;
+        } else {
+            failedCount += 1;
+        }
+
+        let lockUntil: Date | null = user.lock_until ?? null;
+
+        if (failedCount >= threshold) {
+            // Gradual lock
+            const multiplier = Math.min(3, Math.floor(failedCount / threshold));
+            const lockMinutes = baseLockMin * multiplier;
+            lockUntil = new Date(now.getTime() + lockMinutes * 60_000);
+
+            this.logger.warn('AUTH_ACCOUNT_LOCKED', {
+                userId: user.id,
+                email: user.email,
+                failedCount,
+                lockUntil,
+                lockMinutes,
+            });
+        }
+
+        await this.prisma.user.update({
+            where: { id: user.id },
+            data: {
+                failed_login_attempts: failedCount,
+                last_failed_attempt: now,
+                lock_until: lockUntil,
+                updated_at: now,
+            },
+        });
+
+        this.logger.warn('AUTH_LOGIN_FAIL', {
+            userId: user.id,
+            email: user.email,
+            failedCount,
+            lockUntil,
+        });
+    }
+
+    private async resetLoginLock(user: User): Promise<void> {
+        if (
+            !user.failed_login_attempts &&
+            !user.lock_until &&
+            !user.last_failed_attempt
+        ) {
+            return;
+        }
+
+        await this.prisma.user.update({
+            where: { id: user.id },
+            data: {
+                failed_login_attempts: 0,
+                lock_until: null,
+                last_failed_attempt: null,
+                updated_at: new Date(),
+            },
         });
     }
 }

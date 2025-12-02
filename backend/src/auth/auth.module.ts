@@ -6,6 +6,8 @@ import { JwtModule, JwtModuleOptions } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { PassportModule } from '@nestjs/passport';
+import { AuthRateLimitService } from './auth-rate-limit.service';
+import { TokenCleanupService } from './token-cleanup.service';
 
 @Module({
     imports: [
@@ -29,6 +31,6 @@ import { PassportModule } from '@nestjs/passport';
         }),
     ],
     controllers: [AuthController],
-    providers: [AuthService, JwtStrategy],
+    providers: [AuthService, JwtStrategy, AuthRateLimitService, TokenCleanupService],
 })
-export class AuthModule {}
+export class AuthModule { }

@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Reset cơ bản để tránh bị khóa scroll */
+html,
+body {
+  padding: 0;
+  margin: 0;
+  height: 100%;
+}
+
+/* Quan trọng: KHÔNG được overflow: hidden ở đây */
+body {
+  min-height: 100vh;
+  overflow-x: hidden;
+  overflow-y: auto; /* cho phép cuộn dọc */
+  background-color: #020617; /* slate-950 */
+  color: #f9fafb; /* slate-50 */
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+}
+
+/* Đảm bảo Next root full chiều cao */
+#__next {
+  min-height: 100vh;
+}
