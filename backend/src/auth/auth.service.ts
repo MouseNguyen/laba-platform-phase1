@@ -6,6 +6,7 @@ import {
     UnauthorizedException,
     HttpException,
     HttpStatus,
+    NotFoundException,
 } from '@nestjs/common';
 import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
@@ -19,6 +20,9 @@ import { PrismaService } from '../prisma/prisma.service';
 import { Request, Response } from 'express';
 import { DeviceUtil } from './utils/device.util';
 import { SecurityLoggerService } from '../common/security-logger.service';
+import { AuthRateLimitService } from './auth-rate-limit.service';
+import { RefreshLockService } from './refresh-lock.service';
+import { MetricsService } from '../monitoring/metrics.service';
 
 @Injectable()
 export class AuthService {
@@ -30,9 +34,14 @@ export class AuthService {
         private readonly configService: ConfigService,
         private readonly prisma: PrismaService,
         private readonly securityLogger: SecurityLoggerService,
+        private readonly authRateLimitService: AuthRateLimitService,
+        private readonly refreshLockService: RefreshLockService,
+        private readonly metricsService: MetricsService,
     ) { }
 
-    // --- REGISTER ---
+    // =============================================
+    // REGISTER
+    // =============================================
     async register(registerDto: RegisterDto) {
         const existingUser = await this.usersService.findOne(registerDto.email);
         if (existingUser) {
@@ -51,7 +60,9 @@ export class AuthService {
         return result;
     }
 
-    // --- LOGIN ---
+    // =============================================
+    // CLIENT IP
+    // =============================================
     public getClientIp(req: Request): string {
         const xff = req.headers['x-forwarded-for'];
         if (typeof xff === 'string') {
@@ -63,8 +74,15 @@ export class AuthService {
         return (req.ip || req.connection.remoteAddress || '').toString();
     }
 
+    // =============================================
+    // LOGIN
+    // =============================================
     async login(loginDto: LoginDto, req: Request, res: Response, ip: string) {
-        const user = await this.usersService.findOne(loginDto.email);
+        const user = await this.prisma.user.findUnique({
+            where: { email: loginDto.email },
+            include: { user_roles: { include: { role: true } } }
+        });
+
         if (!user) {
             // Delay to avoid timing attacks
             await new Promise((resolve) => setTimeout(resolve, 200));
@@ -73,6 +91,7 @@ export class AuthService {
                 ip,
                 reason: 'User not found',
             });
+            this.metricsService.recordAuthEvent('LOGIN_FAIL');
             throw new UnauthorizedException('Invalid credentials');
         }
 
@@ -83,6 +102,7 @@ export class AuthService {
                 email: user.email,
                 lockUntil: user.lock_until,
             });
+            this.metricsService.recordAuthEvent('ACCOUNT_LOCKED');
             throw new HttpException(
                 'Account is locked. Please try again later.',
                 423,
@@ -109,17 +129,22 @@ export class AuthService {
         // Set cookie
         this.setRefreshTokenCookie(res, refreshToken);
 
+        const roles = user.user_roles.map((ur) => ur.role.name);
+
         return {
             access_token: accessToken,
             user: {
                 id: user.id,
                 email: user.email,
                 full_name: user.full_name,
+                roles,
             },
         };
     }
 
-    // --- REFRESH ---
+    // =============================================
+    // REFRESH TOKEN
+    // =============================================
     async refresh(req: Request, res: Response) {
         const refreshToken = req.cookies['refresh_token'];
         if (!refreshToken) {
@@ -157,6 +182,7 @@ export class AuthService {
                 'SESSION_COMPROMISED',
                 detail,
             );
+            this.metricsService.recordAuthEvent('TOKEN_REUSE');
 
             // Revoke ALL tokens của user này (Kill switch)
             await this.revokeAll(tokenRecord.user_id);
@@ -173,34 +199,46 @@ export class AuthService {
         }
 
         // 3. Check device hash (warning only, không chặn)
-        const currentDeviceHash = DeviceUtil.getDeviceHash(req);
+        const currentDeviceHash = this.getDeviceHash(req);
         if (currentDeviceHash !== tokenRecord.device_hash) {
             this.logger.warn(
                 `Device mismatch for user ${tokenRecord.user_id}. Old: ${tokenRecord.device_hash}, New: ${currentDeviceHash}`,
             );
         }
 
-        // 4. Rotation: revoke cũ, tạo mới
-        await this.prisma.userToken.update({
-            where: { id: tokenRecord.id },
-            data: { revoked_at: new Date() },
-        });
+        // Acquire lock
+        const lockAcquired = await this.refreshLockService.acquireLock(tokenRecord.user_id);
+        if (!lockAcquired) {
+            throw new HttpException('Too many refresh attempts', 429);
+        }
 
-        const newAccessToken = await this.generateAccessToken(tokenRecord.user);
-        const newRefreshToken = await this.generateRefreshToken(
-            tokenRecord.user,
-            req,
-        );
+        try {
+            // 4. Rotation: revoke cũ, tạo mới
+            await this.prisma.userToken.update({
+                where: { id: tokenRecord.id },
+                data: { revoked_at: new Date() },
+            });
 
-        // Set cookie mới
-        this.setRefreshTokenCookie(res, newRefreshToken);
+            const newAccessToken = await this.generateAccessToken(tokenRecord.user);
+            const newRefreshToken = await this.generateRefreshToken(
+                tokenRecord.user,
+                req,
+            );
 
-        return {
-            access_token: newAccessToken,
-        };
+            // Set cookie mới
+            this.setRefreshTokenCookie(res, newRefreshToken);
+
+            return {
+                access_token: newAccessToken,
+            };
+        } finally {
+            await this.refreshLockService.releaseLock(tokenRecord.user_id);
+        }
     }
 
-    // --- LOGOUT ---
+    // =============================================
+    // LOGOUT
+    // =============================================
     async logout(req: Request, res: Response) {
         const refreshToken = req.cookies['refresh_token'];
         if (refreshToken) {
@@ -233,7 +271,9 @@ export class AuthService {
         return { message: 'Logged out successfully' };
     }
 
-    // --- REVOKE ALL ---
+    // =============================================
+    // REVOKE ALL
+    // =============================================
     async revokeAll(userId: number) {
         // 1. Tăng token version của user (kill-switch cho access token)
         await this.prisma.user.update({
@@ -253,9 +293,69 @@ export class AuthService {
         return { message: 'All sessions revoked' };
     }
 
-    // --- HELPERS ---
+    // =============================================
+    // GET ME (with Roles)
+    // =============================================
+    async getMe(userId: number) {
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+            select: {
+                id: true,
+                email: true,
+                full_name: true,
+                token_version: true,
+                created_at: true,
+                // Include roles from junction table
+                user_roles: {
+                    select: {
+                        role: {
+                            select: {
+                                name: true,
+                                description: true,
+                            },
+                        },
+                    },
+                },
+            },
+        });
 
-    private async generateAccessToken(user: User): Promise<string> {
+        if (!user) {
+            throw new NotFoundException('User not found');
+        }
+
+        // Flatten roles array for frontend
+        const roles = user.user_roles.map((ur) => ur.role.name);
+
+        return {
+            id: user.id,
+            email: user.email,
+            full_name: user.full_name,
+            roles, // ["admin", "super_admin"]
+        };
+    }
+
+    // =============================================
+    // DEVICE & IP HELPERS
+    // =============================================
+    getSubnetForIp(ip: string): string {
+        if (ip.includes(':')) { // IPv6
+            return ip.split(':').slice(0, 4).join(':') + '::/64';
+        } else { // IPv4
+            return ip.split('.').slice(0, 3).join('.') + '.0/24';
+        }
+    }
+
+    getDeviceHash(req: Request): string {
+        const userAgent = req.headers['user-agent'] || 'unknown';
+        const ip = this.getClientIp(req);
+        const subnet = this.getSubnetForIp(ip);
+        return crypto.createHash('sha256').update(userAgent + subnet).digest('hex');
+    }
+
+    // =============================================
+    // TOKEN HELPERS
+    // =============================================
+    private async generateAccessToken(user: any): Promise<string> {
         const payload = {
             sub: user.id,
             email: user.email,
@@ -263,7 +363,7 @@ export class AuthService {
         };
 
         const expiresIn =
-            Number(this.configService.get('JWT_ACCESS_EXPIRES_IN')) || 900; // giây
+            Number(this.configService.get('JWT_ACCESS_EXPIRES_IN')) || 900;
 
         return this.jwtService.signAsync(payload, {
             expiresIn,
@@ -271,30 +371,29 @@ export class AuthService {
     }
 
     private async generateRefreshToken(
-        user: User,
+        user: any,
         req: Request,
     ): Promise<string> {
-        // Random string hex
+        await this.authRateLimitService.checkConcurrentSessions(user.id);
+
         const refreshToken = crypto.randomBytes(40).toString('hex');
         const refreshTokenHash = this.hashToken(refreshToken);
 
-        // TTL refresh token: ENV (tính bằng GIÂY) hoặc default 7 ngày
         const refreshTtlSeconds =
             Number(this.configService.get('JWT_REFRESH_EXPIRES_IN')) ||
-            7 * 24 * 60 * 60; // 7 ngày
+            7 * 24 * 60 * 60;
 
         const expiresAt = new Date(Date.now() + refreshTtlSeconds * 1000);
 
-        const deviceHash = DeviceUtil.getDeviceHash(req);
+        const deviceHash = this.getDeviceHash(req);
         const deviceInfo = DeviceUtil.getDeviceInfo(req);
 
-        // Lưu vào DB
         await this.prisma.userToken.create({
             data: {
                 user_id: user.id,
                 refresh_token_hash: refreshTokenHash,
                 device_hash: deviceHash,
-                device_info: deviceInfo as any, // JSON
+                device_info: deviceInfo as any,
                 expires_at: expiresAt,
             },
         });
@@ -303,11 +402,9 @@ export class AuthService {
     }
 
     private setRefreshTokenCookie(res: Response, token: string) {
-        // Dùng cùng TTL với refresh token (tính bằng GIÂY)
         const refreshTtlSeconds =
             Number(this.configService.get('JWT_REFRESH_EXPIRES_IN')) ||
-            7 * 24 * 60 * 60; // 7 ngày
-
+            7 * 24 * 60 * 60;
         const maxAgeMs = refreshTtlSeconds * 1000;
 
         res.cookie('refresh_token', token, {
@@ -315,7 +412,7 @@ export class AuthService {
             secure: this.configService.get('NODE_ENV') === 'production',
             sameSite: 'strict',
             path: '/',
-            maxAge: maxAgeMs, // number → đúng type CookieOptions
+            maxAge: maxAgeMs,
         });
     }
 
@@ -341,7 +438,6 @@ export class AuthService {
 
     private async handleLoginFailure(user: User): Promise<void> {
         const now = new Date();
-
         const threshold =
             this.configService.get<number>('ACCOUNT_LOCK_THRESHOLD') ?? 5;
         const baseLockMin =
@@ -349,11 +445,9 @@ export class AuthService {
 
         const lastFailed = user.last_failed_attempt;
         let failedCount = user.failed_login_attempts ?? 0;
-
         const windowMs = baseLockMin * 60_000;
 
         if (!lastFailed || now.getTime() - lastFailed.getTime() > windowMs) {
-            // quá lâu không sai, reset counter
             failedCount = 1;
         } else {
             failedCount += 1;
@@ -362,7 +456,6 @@ export class AuthService {
         let lockUntil: Date | null = user.lock_until ?? null;
 
         if (failedCount >= threshold) {
-            // Gradual lock
             const multiplier = Math.min(3, Math.floor(failedCount / threshold));
             const lockMinutes = baseLockMin * multiplier;
             lockUntil = new Date(now.getTime() + lockMinutes * 60_000);
@@ -374,6 +467,7 @@ export class AuthService {
                 lockUntil,
                 lockMinutes,
             });
+            this.metricsService.recordAuthEvent('ACCOUNT_LOCKED');
         }
 
         await this.prisma.user.update({
@@ -392,6 +486,7 @@ export class AuthService {
             failedCount,
             lockUntil,
         });
+        this.metricsService.recordAuthEvent('LOGIN_FAIL');
     }
 
     private async resetLoginLock(user: User): Promise<void> {

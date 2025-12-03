@@ -1,0 +1,294 @@
+# 🎯 TÓM TẮT DỰ ÁN LABA PLATFORM – PHIÊN BẢN HOÀN CHỈNH (ĐỂ CHUYỂN CONTEXT)
+
+**Sao chép nguyên văn đoạn này để chatbot mới hiểu ngay toàn bộ kiến trúc.**
+
+---
+
+## **1. TỔNG QUAN DỰ ÁN**
+
+**Tên**: Laba Platform  
+**Mục tiêu**: Xây dựng nền tảng quản lý đa chi nhánh (Farm, Homestay, Cafe) với booking, thương mại điện tử, POS và CRM.  
+**Kiến trúc**: Plugin-based – Phase 1 là core platform, các Phase sau chỉ thêm module mới không phá vỡ nền tảng.
+
+---
+
+## **2. TECH STACK**
+
+### **Backend (NestJS)**
+- **Language**: TypeScript
+- **Framework**: NestJS (modular architecture)
+- **ORM**: Prisma
+- **Database**: PostgreSQL
+- **Cache/Store**: Redis (cho rate limit & lock)
+- **Auth**: JWT (Access Token) + HttpOnly Cookie (Refresh Token) + Argon2id
+- **Monitoring**: Prometheus + Grafana
+- **Testing**: Jest (unit), k6 (load), Pact (contract)
+
+### **Frontend (Next.js)**
+- **Language**: TypeScript
+- **Framework**: Next.js 14 (App Router)
+- **Styling**: Tailwind CSS
+- **State**: React Context (Auth)
+- **HTTP Client**: Axios + Interceptor
+
+### **Infrastructure**
+- **Dev**: Docker Compose (Postgres + Redis)
+- **CI/CD**: GitHub Actions (Pact verification)
+- **Env**: `.env` validate bằng Joi
+
+---
+
+## **3. PHASE 1 – CORE PLATFORM (✅ COMPLETED)**
+
+### **Backend đã làm**
+- **Module**: `auth` (login, register, refresh, logout, revoke-all, /me), `users`, `landing`, `prisma`, `security-logger`, `schedule`
+- **Auth Security**:
+  - Password: Argon2id (memoryCost=19456, timeCost=2)
+  - Token: Access JWT chứa `sub`, `email`, `ver` (token_version)
+  - Refresh: SHA-256 hash trong DB, không lưu raw token
+  - Token versioning: `user.token_version++` → kill switch tất cả token cũ
+  - **Token reuse detection**: Dùng token đã revoke → log `SESSION_COMPROMISED`, revoke all, gửi webhook alert
+  - Device fingerprint: IPv4/24, IPv6/64 → chỉ log WARN, không block
+  - Rate limit: In-memory → cần Redis cho multi-instance
+  - Account lock: Gradual lock (5 lần sai trong 15 phút → lock 15 phút)
+- **Database Schema**:
+  - `users`: `token_version`, `email_verified_at`, `failed_login_attempts`, `lock_until`, soft delete
+  - `user_tokens`: `refresh_token_hash`, `device_hash`, `device_info`, `expires_at`, `revoked_at`
+  - `roles`, `permissions`, `user_roles`, `role_permissions`, `user_branches`, `branches`
+  - `landing_content`: Dynamic blocks (`key`, `locale`, `sort_order`, JSON content)
+- **ENV**: đã validate bằng Joi (JWT secrets, Argon2, rate limits, CORS, webhook)
+
+### **Frontend đã làm**
+- **Pages**: `/` (landing), `/login`, `/dashboard` (protected)
+- **Auth Flow**:
+  - Access token: chỉ lưu trong memory
+  - Refresh token: HttpOnly cookie
+  - Interceptor: 401 → refresh → retry, 403 SESSION_COMPROMISED → logout
+- **Role Colors**: Badge xanh lá (admin/super_admin), xanh dương, tím, xám (staff/manager)
+
+### **Scripts & DevOps**
+- **Seed**: `prisma/seed.ts` → admin `admin@laba.vn/Admin@123456`, branch `MAIN`, 5 landing blocks
+- **Health**: `GET /health` → check DB
+- **Generate secrets**: `npm run generate-secrets`
+- **Docker**: `docker-compose.dev.yml` (Postgres + Redis + Mailhog) – **chưa tạo**
+- **Helmet**: `@nestjs/helmet` chưa cài – **không blocker**
+
+---
+
+## **4. PHASE 1.5 – HARDENING (✅ COMPLETED)**
+
+### **B1: Redis Multi-Instance Rate Limit – Fail-Open**
+- **Fail-open**: Redis down → unlimited (không crash app)
+- **Storage**: `RedisThrottlerStorage` wrap Redis error, return unlimited khi lỗi
+- **TTL**: 60s, limit 5 req/phút (login), 10 req/5 phút (refresh)
+- **Guard**: `@UseGuards(ThrottlerGuard)` + `@Throttle()` decorator
+- **Config**: `ENABLE_REDIS_RATE_LIMIT` (có thể tắt trong dev)
+
+### **B2: Rotation Lock – Anti Race Condition**
+- **TTL**: 3000ms (3 giây)
+- **Fail-open**: Redis error → vẫn cho phép refresh
+- **Implementation**: `RefreshLockService.acquireLock()` + `finally releaseLock()`
+- **Behavior**: Nếu user spam 2 request refresh cùng lúc, 1 thành công, 1 trả 429
+
+### **B3: Prometheus + Grafana – Safe Metrics**
+- **Metrics**: `laba_http_requests_total`, `laba_auth_events_total` (không có userId label)
+- **Guard**: `BasicAuthGuard` bảo vệ `/metrics`
+- **Counter**: Record `LOGIN_FAIL`, `TOKEN_REUSE`, `ACCOUNT_LOCKED`
+- **Docker**: `docker-compose.monitoring.yml` (Prometheus + Grafana)
+
+### **B4: Load Test (k6) – Realistic Scenarios**
+- **Script**: `test/load/auth-flow.js` (login → me → loop)
+- **Script**: `test/load/refresh-reuse.js` (test token reuse detection)
+- **Thresholds**: `p(95)<500ms`, `login_fail<5%`
+
+### **B5: Pact Contract Testing**
+- **Consumer**: `test/pact/consumer/auth.pact.spec.ts`
+- **Provider**: `test/pact/provider/auth.pact.provider.spec.ts`
+- **State Handlers**: Backend tạo user test khi verify
+- **CI**: `.github/workflows/pact.yml`
+
+### **B6: Silent Refresh – Multi-Tab Deduplication (NO Web Worker)**
+- **Implementation**: `setTimeout` trong `AuthContext`
+- **Logic**: Refresh token trước khi hết hạn 60s
+- **Deduplication**: `localStorage` lock key + `BroadcastChannel` → chỉ 1 tab refresh
+- **Tab active**: Khi `document.visibilityState = visible`, nếu token < 30s sắp hết → refresh ngay
+
+---
+
+## **5. TÌNH TRẠNG HIỆN TẠI (Production-Ready)**
+
+### **✅ Đã xong và chạy được**
+- **Backend**: 1 instance ổn định, auth flow an toàn, rate limit bảo vệ
+- **Frontend**: Mượt, dashboard protected, role badge màu
+- **Redis**: Chưa chạy trong dev (chỉ cần khi test B1-B2)
+- **Database**: PostgreSQL connection pool đã giới hạn
+-- **Helmet headers**: 
+- **Docker Compose**: 
+
+### **⚠️ Chưa cần làm ngay**
+- **Nginx/K8s Ingress**: Chỉ cần khi scale lên **2+ instance** (hiện tại chạy 1 instance)
+
+---
+
+## **6. CẤU TRÚC THƯ MỤC CHÍNH**
+
+```
+laba-platform-phase1/
+├── backend/
+│   ├── src/
+│   │   ├── auth/          # Service, controller, guard, DTO, rate limit, lock
+│   │   ├── users/         # User module
+│   │   ├── landing/       # Landing API
+│   │   ├── prisma/        # Prisma service
+│   │   ├── config/        # Joi validation
+│   │   ├── monitoring/    # Prometheus metrics
+│   │   └── main.ts        # Entry point
+│   ├── prisma/
+│   │   └── schema.prisma  # DB schema
+│   ├── test/
+│   │   ├── load/          # k6 scripts
+│   │   └── pact/          # Pact tests
+│   └── scripts/           # generate-secrets.js
+│
+├── frontend/
+│   ├── src/
+│   │   ├── app/           # Pages (/, /login, /dashboard)
+│   │   ├── context/       # AuthContext
+│   │   ├── lib/           # apiClient, types
+│   │   └── types/         # TypeScript types
+│   └── next.config.js
+│
+├── docker-compose.monitoring.yml  # Prometheus + Grafana
+└── README.md
+```
+
+---
+
+## **7. ENVIRONMENT VARIABLES (Backend)**
+
+Tạo file `backend/.env` từ template:
+
+```env
+# Server
+PORT=3000
+NODE_ENV=development
+
+# Database
+DATABASE_URL="postgresql://laba_user:password@localhost:5432/laba_platform_dev?connection_limit=20"
+
+# JWT & Cookie
+JWT_ACCESS_SECRET="sinh ra bằng: npm run generate-secrets"
+JWT_REFRESH_SECRET="sinh ra bằng: npm run generate-secrets"
+COOKIE_SECRET="sinh ra bằng: npm run generate-secrets"
+
+# Argon2id
+ARGON2_MEMORY_COST=19456
+ARGON2_TIME_COST=2
+ARGON2_PARALLELISM=1
+
+# Rate Limit
+RATE_LIMIT_LOGIN_PER_USER=10
+RATE_LIMIT_LOGIN_PER_IP=10
+RATE_LIMIT_REGISTER_PER_IP=10
+
+# Redis (nếu test B1-B2)
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASSWORD=
+ENABLE_REDIS_RATE_LIMIT=false  # Set true khi cần test
+
+# Monitoring
+METRICS_USER=metrics
+METRICS_PASS=changeme
+
+# CORS
+CORS_ORIGIN=http://localhost:3001
+
+# Alert Webhook (optional)
+ALERT_WEBHOOK_URL=https://hooks.slack.com/...
+```
+
+---
+
+## **8. CÂU LỆNH CHUẨN ĐỂ CHẠY**
+
+### **Backend**
+```bash
+cd backend
+
+# 1. Setup
+npm install
+npx prisma generate
+npx prisma migrate reset --force  # Chạy seed
+
+# 2. Start Redis (nếu cần test B1-B2)
+docker run -d --name redis-laba -p 6379:6379 redis:7-alpine
+
+# 3. Start backend
+npm run start:dev  # http://localhost:3000
+
+# 4. Test auth
+curl -X POST http://localhost:3000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@laba.vn","password":"Admin@123456"}'
+
+# 5. Test health
+curl http://localhost:3000/health
+```
+
+### **Frontend**
+```bash
+cd frontend
+npm install
+npm run dev  # http://localhost:3001
+
+# Login: admin@laba.vn / Admin@123456
+# Vào /dashboard để thấy badge "SUPER ADMIN" màu xanh lá
+```
+
+---
+
+## **9. LỘ TRÌNH Phase 2 – BOOKING (Sắp bắt đầu)**
+
+### **Mục tiêu**
+Cho phép khách đặt chỗ trải nghiệm (Farm tour, Homestay) và admin quản lý booking.
+
+### **Backend – Cần làm**
+- **Module**: `booking`, `availability`
+- **Tables**:
+  - `booking_services`: định nghĩa dịch vụ (Farm Tour 9h-11h, max 20 khách, giá)
+  - `bookings`: header booking (user_id, branch_id, ngày, trạng thái, tổng tiền)
+  - `booking_items`: chi tiết từng dịch vụ trong booking
+- **APIs**:
+  - `POST /api/v1/booking/public` – tạo booking (không cần login)
+  - `GET /api/v1/availability` – kiểm tra slot còn trống theo ngày
+  - `GET/POST /api/v1/booking/admin` – quản lý (admin)
+- **Logic**:
+  - Transaction để tránh overbooking (double submit)
+  - Check capacity theo ngày, giờ, chi nhánh
+  - Timezone: UTC+7 (Asia/Ho_Chi_Minh)
+
+### **Frontend – Cần làm**
+- **Public page**: `/booking` – form chọn chi nhánh, ngày, giờ, số khách, loại dịch vụ
+- **Admin page**: `/admin/bookings` – danh sách booking, filter theo ngày/trạng thái, calendar view
+
+---
+
+## **10. CÂU HỎI QUAN TRỌNG CHO CHATBOT MỚI**
+
+Khi chuyển sang Phase 2, chatbot cần biết:
+
+```
+Tôi đang ở Phase 1 COMPLETED, bao gồm:
+- Auth complete với JWT, refresh token, Argon2id, rate limit Redis, metrics Prometheus
+- Dashboard protected, role badge màu
+- Landing page dynamic từ DB
+
+Bây giờ cần bắt đầu Phase 2: Booking module. Hãy tạo:
+1. Prisma schema cho bookings, booking_services, availability
+2. NestJS module booking với endpoints POST /booking, GET /availability
+3. Logic chống overbooking bằng transaction
+4. Frontend public page form đặt chỗ và admin page quản lý booking
+```
+
+**→ Chatbot sẽ tiếp tục từ đây không cần hỏi lại.**

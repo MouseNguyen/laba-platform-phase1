@@ -1,0 +1,130 @@
+{
+  "consumer": {
+    "name": "LabaFrontend"
+  },
+  "interactions": [
+    {
+      "description": "a valid login request",
+      "providerStates": [
+        {
+          "name": "user test@laba.vn exists with password Test@123"
+        }
+      ],
+      "request": {
+        "body": {
+          "email": "test@laba.vn",
+          "password": "Test@123"
+        },
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "method": "POST",
+        "path": "/auth/login"
+      },
+      "response": {
+        "body": {
+          "access_token": "jwt.token.here",
+          "user": {
+            "email": "test@laba.vn",
+            "full_name": "Test User",
+            "id": 1,
+            "roles": [
+              "admin"
+            ]
+          }
+        },
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "matchingRules": {
+          "body": {
+            "$.access_token": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.user.email": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.user.full_name": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.user.id": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.user.roles": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            }
+          }
+        },
+        "status": 200
+      }
+    },
+    {
+      "description": "an invalid login request",
+      "providerStates": [
+        {
+          "name": "no user test@laba.vn"
+        }
+      ],
+      "request": {
+        "body": {
+          "email": "test@laba.vn",
+          "password": "WrongPass"
+        },
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "method": "POST",
+        "path": "/auth/login"
+      },
+      "response": {
+        "body": {
+          "message": "Invalid credentials"
+        },
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "status": 401
+      }
+    }
+  ],
+  "metadata": {
+    "pact-js": {
+      "version": "16.0.2"
+    },
+    "pactRust": {
+      "ffi": "0.4.28",
+      "models": "1.3.5"
+    },
+    "pactSpecification": {
+      "version": "3.0.0"
+    }
+  },
+  "provider": {
+    "name": "LabaBackend"
+  }
+}

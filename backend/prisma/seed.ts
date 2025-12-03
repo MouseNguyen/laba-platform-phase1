@@ -6,69 +6,71 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🚀 Starting seed...');
 
-  // 1. Seed admin user
-  const adminEmail = 'admin@laba.vn';
-  const adminPassword = 'Admin@123';
+  // ========== 1. Clean up ==========
+  await prisma.userToken.deleteMany();
+  await prisma.userRole.deleteMany(); // Xóa liên kết trước
+  await prisma.role.deleteMany(); // Xóa roles cũ
+  await prisma.user.deleteMany();
+  await prisma.branch.deleteMany();
 
-  let admin = await prisma.user.findUnique({
-    where: { email: adminEmail },
+  // ========== 2. Create Roles ==========
+  console.log('👉 Creating roles...');
+  const adminRole = await prisma.role.create({
+    data: {
+      name: 'admin',
+      description: 'Administrator with full access',
+    },
+  });
+  const superAdminRole = await prisma.role.create({
+    data: {
+      name: 'super_admin',
+      description: 'Super Administrator with all privileges',
+    },
   });
 
-  if (!admin) {
-    console.log('👉 Creating admin user...');
-    const password_hash = await argon2.hash(adminPassword, {
-      type: argon2.argon2id,
-    });
-
-    admin = await prisma.user.create({
-      data: {
-        email: adminEmail,
-        full_name: 'Laba Admin',
-        password_hash,
-        // token_version default 0
-      },
-    });
-  } else {
-    console.log('✅ Admin user already exists.');
-  }
-
-  // 2. Seed branch
-  const branchCode = 'laba-dalat';
-
-  let branch = await prisma.branch.findFirst({
-    where: { code: branchCode },
+  // ========== 3. Create Admin User ==========
+  console.log('👉 Creating admin user...');
+  const adminPassword = 'Admin@123456';
+  const password_hash = await argon2.hash(adminPassword, {
+    type: argon2.argon2id,
   });
 
-  if (!branch) {
-    console.log('👉 Creating default branch...');
-    branch = await prisma.branch.create({
-      data: {
-        name: 'Laba Farm – Đà Lạt',
-        code: branchCode,
-        address: 'Đà Lạt',
-        phone: null,
-      },
-    });
-  } else {
-    console.log('✅ Branch already exists.');
-  }
+  const admin = await prisma.user.create({
+    data: {
+      email: 'admin@laba.vn',
+      password_hash,
+      full_name: 'Admin User',
+      token_version: 0,
+      // ❌ XÓA: is_active: true,  // KHÔNG TỒN TẠI trong schema
+    },
+  });
 
-  // 3. Seed landing contents
+  // ========== 4. Link User to Roles ==========
+  console.log('👉 Linking user to roles...');
+  await prisma.userRole.createMany({
+    data: [
+      { user_id: admin.id, role_id: adminRole.id },
+      { user_id: admin.id, role_id: superAdminRole.id },
+    ],
+  });
+
+  // ========== 5. Create Branch ==========
+  console.log('👉 Creating default branch...');
+  const branch = await prisma.branch.create({
+    data: {
+      code: 'MAIN',
+      name: 'LABA MAIN BRANCH',
+      address: 'Đà Lạt',
+      phone: null,
+      // ❌ XÓA: description,  // KHÔNG TỒN TẠI trong schema
+    },
+  });
+
+  // ========== 6. Seed LandingContent ==========
+  console.log('👉 Seeding landing contents...');
   const locale = 'vi';
 
-  type LandingSeed = {
-    key: string;
-    title: string;
-    subtitle?: string | null;
-    short_story: string;
-    image_url?: string | null;
-    image_alt?: string | null;
-    sort_order: number;
-    status: LandingStatus;
-    is_active: boolean;
-  };
-
-  const landingSeeds: LandingSeed[] = [
+  const landingSeeds = [
     {
       key: 'hero',
       title: 'Laba Farm – sống chậm giữa vườn, thở cùng thiên nhiên',
@@ -81,6 +83,7 @@ async function main() {
       status: LandingStatus.published,
       is_active: true,
     },
+    // ... (các block khác giữ nguyên) ...
     {
       key: 'farm',
       title: 'Nông trại – nơi cây được chăm như người nhà',
@@ -143,8 +146,6 @@ async function main() {
     },
   ];
 
-  console.log('👉 Seeding landing contents...');
-
   for (const item of landingSeeds) {
     await prisma.landingContent.upsert({
       where: {
@@ -186,7 +187,9 @@ async function main() {
     });
   }
 
-  console.log('✅ Seed completed.');
+  console.log(`✅ Seed completed:`);
+  console.log(`   Admin: ${admin.email} / ${adminPassword}`);
+  console.log(`   Branch: ${branch.code} - ${branch.name}`);
 }
 
 main()

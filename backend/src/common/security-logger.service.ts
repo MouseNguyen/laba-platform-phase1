@@ -14,6 +14,11 @@ export class SecurityLoggerService {
         this.logger.warn(`[SECURITY] ${type}`, detail);
     }
 
+    logRefreshLimitExceeded(ip: string, attempts: number) {
+        this.logger.warn(`[SECURITY] AUTH_REFRESH_LIMIT_EXCEEDED - IP: ${ip}, Attempts: ${attempts}`);
+        this.notifyAlertWebhook('AUTH_REFRESH_LIMIT_EXCEEDED', { ip, attempts });
+    }
+
     async notifyAlertWebhook(type: string, detail: Record<string, any>) {
         if (!this.webhookUrl) {
             return;

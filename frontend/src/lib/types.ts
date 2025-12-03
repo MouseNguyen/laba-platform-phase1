@@ -6,12 +6,12 @@
 // Landing Page Types
 // ---------------------------------------------
 
-export type LandingBlockKey = 
-  | 'hero' 
-  | 'farm' 
-  | 'homestay' 
-  | 'cafe' 
-  | 'about' 
+export type LandingBlockKey =
+  | 'hero'
+  | 'farm'
+  | 'homestay'
+  | 'cafe'
+  | 'about'
   | 'product_highlight';
 
 export type LandingStatus = 'draft' | 'published' | 'archived';
@@ -49,6 +49,7 @@ export interface User {
   id: number;
   email: string;
   full_name: string;
+  roles: string[];
 }
 
 // ---------------------------------------------

@@ -11,6 +11,8 @@ import { CommonModule } from './common/common.module';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { RedisModule } from './redis/redis.module';
+import { MonitoringModule } from './monitoring/monitoring.module';
 
 @Module({
     imports: [
@@ -21,6 +23,8 @@ import { AppService } from './app.service';
         AuthModule,
         UsersModule,
         LandingModule,
+        RedisModule,
+        MonitoringModule,
     ],
     controllers: [AppController],
     providers: [AppService],

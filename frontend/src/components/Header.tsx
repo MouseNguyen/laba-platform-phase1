@@ -115,6 +115,14 @@ export default function Header() {
                 gap: '1rem',
               }}
             >
+              {/* Dashboard Link */}
+              <Link
+                href="/dashboard"
+                className="text-[#10b981] hover:underline text-sm font-medium"
+              >
+                Dashboard
+              </Link>
+
               {/* User Info */}
               <span
                 style={{

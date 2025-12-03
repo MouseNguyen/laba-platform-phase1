@@ -1,0 +1,258 @@
+| Gói công việc           | Spec gốc                      | Thực tế           | Chênh lệch     |
+| ----------------------- | ----------------------------- | ----------------- | -------------- |
+| **Phase 0 Docs**        | Tài liệu kiến trúc            | Không có          | **100% thiếu** |
+| **Phase 0 Skeleton**    | Backend/Frontend skeleton     | Code luôn         | **50% thiếu**  |
+| **Phase 1 Auth**        | Full auth                     | Đã làm đầy đủ     | **0% thiếu**   |
+| **Phase 1 CMS**         | CRUD posts, publish/unpublish | Chỉ API tổng quát | **70% thiếu**  |
+| **Phase 1 Branches**    | CRUD branches                 | Chỉ seed          | **80% thiếu**  |
+| **Phase 1 Users Admin** | CRUD, lock/unlock             | Chỉ hiển thị      | **80% thiếu**  |
+| **Phase 1 Public Site** | About, Blog, Contact          | Chỉ Landing       | **75% thiếu**  |
+| **Phase 1.5 Hardening** | Redis, Metrics, Contract      | Đã làm đầy đủ     | **0% thiếu**   |
+
+
+
+# ✅ **QUYẾT ĐỊNH ĐƯỢC GHI NHẬN: TUÂN THỦ SPEC GỐC 100%**
+
+Chúng ta sẽ **dừng Phase 2**, quay lại hoàn thiện **Phase 0 & 1** đúng như spec. Dưới đây là **kế hoạch chi tiết 3-5 ngày** với checklist cụ thể.
+
+---
+
+## **📅 KẾ HOẠCH HOÀN THÀNH PHASE 0 & 1**
+
+### **NGÀY 1: Phase 0 – Tài liệu & Khởi tạo skeleton (Ưu tiên cao)**
+
+#### **Sáng (2-3h): Tài liệu kiến trúc**
+- [ ] **Tạo file**: `/docs/architecture-overview.md`
+  - Nội dung: Mô tả tổng quan hệ thống, stack, luồng dữ liệu, quy ước API
+  - Tham khảo: [GitLab Architecture Doc](https://docs.gitlab.com/ee/development/architecture.html)
+
+- [ ] **Tạo file**: `/docs/api-conventions.md`
+  - Nội dung: Format response, error codes, pagination, filter pattern
+  - Mẫu:
+    ```markdown
+    ## API Response Format
+    {
+      "statusCode": number,
+      "message": string,
+      "data": T | null,
+      "meta": { pagination, filters }
+    }
+    ```
+
+- [ ] **Tạo file**: `/backend/.eslintrc.js` + `/backend/.prettierrc` (nếu chưa có)
+  - Dùng config NestJS chuẩn: `npx eslint --init`
+
+#### **Chiều (2h): Backend Skeleton**
+- [ ] **Tạo module skeleton** (chưa có logic, chỉ file trống):
+  - `src/cms/cms.module.ts`
+  - `src/branches/branches.module.ts`
+  - `src/users-admin/users-admin.module.ts` (tách riêng khỏi `auth`)
+
+- [ ] **Tạo file**: `/backend/README.md`
+  - Nội dung: Cách setup dev, cấu trúc folder, naming convention
+
+#### **Tối (1h): Frontend Skeleton**
+- [ ] **Tạo folder structure** (nếu chưa đầy đủ):
+  ```
+  frontend/
+  ├── src/app/(public)/          # Website public
+  ├── src/app/(admin)/           # Admin portal
+  ├── src/components/ui/         # UI components chung
+  └── src/lib/api/               # API clients
+  ```
+
+---
+
+### **NGÀY 2: Phase 1 – Backend Module `posts` (CMS)**
+
+#### **Sáng (3h): Prisma Schema + Migration**
+- [ ] **Cập nhật `schema.prisma`**:
+  ```prisma
+  model Post {
+    id          Int      @id @default(autoincrement())
+    type        String   // PAGE, BLOG, NEWS
+    slug        String   @unique
+    title       String
+    excerpt     String?
+    content     Json     // Rich text JSON
+    thumbnailUrl String?
+    authorId    Int?
+    isPublished Boolean  @default(false)
+    publishedAt DateTime?
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+    deletedAt   DateTime?
+    
+    author      User?    @relation(fields: [authorId], references: [id])
+    @@index([type])
+    @@index([isPublished])
+  }
+  ```
+- [ ] **Run migration**: `npx prisma migrate dev --name add-posts-table`
+
+#### **Chiều (3h): API CRUD**
+- [ ] **Tạo DTOs**: `create-post.dto.ts`, `update-post.dto.ts`, `query-posts.dto.ts`
+- [ ] **Tạo Service**: `src/cms/posts.service.ts` (full CRUD + pagination)
+- [ ] **Tạo Controller**: `src/cms/posts.controller.ts`
+  - `GET /posts?type=&page=&limit=` (list + filter)
+  - `GET /posts/:slug` (detail)
+  - `POST /posts` (create – admin)
+  - `PUT /posts/:id` (update – admin)
+  - `DELETE /posts/:id` (soft delete – admin)
+  - `PATCH /posts/:id/publish` (publish/unpublish)
+
+---
+
+### **NGÀY 3: Phase 1 – Backend Module `branches` & `users-admin`**
+
+#### **Sáng (2h): Module `branches`**
+- [ ] **Cập nhật `schema.prisma`** (nếu cần thêm field):
+  ```prisma
+  model Branch {
+    id          Int      @id @default(autoincrement())
+    code        String   @unique
+    name        String
+    type        String   // FARM, HOMESTAY, CAFE, SHOP
+    settings    Json?    // JSONB
+    isActive    Boolean  @default(true)
+    address     String?
+    phone       String?
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+    deletedAt   DateTime?
+  }
+  ```
+- [ ] **Tạo DTOs**: `create-branch.dto.ts`, `update-branch.dto.ts`
+- [ ] **Tạo Service & Controller**: Full CRUD + gán user vào branch
+- [ ] **API**: `GET /branches`, `POST /branches`, `PUT /branches/:id`, `DELETE /branches/:id`
+
+#### **Chiều (3h): Module `users-admin`**
+- [ ] **Tạo Controller**: `src/users-admin/users-admin.controller.ts`
+  - `GET /admin/users` (list + search + filter)
+  - `GET /admin/users/:id` (detail)
+  - `PUT /admin/users/:id/lock` (lock account)
+  - `PUT /admin/users/:id/unlock` (unlock)
+  - `PUT /admin/users/:id/roles` (update roles)
+- [ ] **Add permissions**: `user.view`, `user.lock`, `user.update_roles` vào DB seed
+
+---
+
+### **NGÀY 4: Phase 1 – Frontend Pages (About, Blog, Contact)**
+
+#### **Sáng (2h): Public Pages**
+- [ ] **Tạo**: `frontend/src/app/(public)/about/page.tsx`
+  - Content tĩnh từ DB hoặc hard-code (vì spec chưa rõ)
+- [ ] **Tạo**: `frontend/src/app/(public)/blog/page.tsx`
+  - `getPosts({ type: 'BLOG', isPublished: true })`
+- [ ] **Tạo**: `frontend/src/app/(public)/blog/[slug]/page.tsx`
+  - Render chi tiết post
+- [ ] **Tạo**: `frontend/src/app/(public)/contact/page.tsx`
+  - Form liên hệ → POST `/api/contact` (tạm lưu DB hoặc gửi email)
+
+#### **Chiều (3h): Admin UI**
+- [ ] **Tạo**: `frontend/src/app/(admin)/users/page.tsx`
+  - Bảng danh sách user, nút Lock/Unlock
+- [ ] **Tạo**: `frontend/src/app/(admin)/branches/page.tsx`
+  - Bảng danh sách chi nhánh, form create/edit
+- [ ] **Tạo**: `frontend/src/app/(admin)/posts/page.tsx`
+  - Bảng danh sách posts, nút Publish/Unpublish
+
+---
+
+### **NGÀY 5: Phase 1 – Security & Polish**
+
+#### **Sáng (2h): Bảo mật & Helmet**
+- [ ] **Cài**: `npm install @nestjs/helmet`
+- [ ] **Cập nhật `main.ts`**:
+  ```typescript
+  app.use(helmet({
+    contentSecurityPolicy: false, // Tạm tắt vì Next.js streaming
+    crossOriginEmbedderPolicy: false,
+  }));
+  ```
+- [ ] **Cập nhật CORS**: `'CORS_ORIGIN' !== '*'` (đã có trong config)
+- [ ] **Thêm rate limit global**: Trong `main.ts` nếu chưa có
+
+#### **Chiều (2h): Testing & Verification**
+- [ ] **Tạo test E2E**: `test/phase1-complete.e2e-spec.ts`
+  - Test flow: Register → Login → Create Post → Publish → View on frontend
+- [ ] **Chạy test**: `npm run test:e2e`
+- [ ] **Verify checklist** (dưới đây)
+
+---
+
+## **☑️ FINAL CHECKLIST – COMPLETION CRITERIA**
+
+### **Phase 0 Deliverables**
+- [x] ~~Node.js + NestJS installed~~ (đã có)
+- [x] ~~PostgreSQL + Prisma connected~~ (đã có)
+- [x] ~~Repo created~~ (đã có)
+- [ ] **`/docs/architecture-overview.md`** (written)
+- [ ] **`/docs/api-conventions.md`** (written)
+- [ ] **`/backend/README.md`** (setup instructions)
+- [ ] **ESLint + Prettier config** (committed)
+
+### **Phase 1 Backend APIs**
+- [ ] `POST /api/v1/posts` – create post
+- [ ] `PUT /api/v1/posts/:id` – update post
+- [ ] `DELETE /api/v1/posts/:id` – soft delete post
+- [ ] `PATCH /api/v1/posts/:id/publish` – toggle publish
+- [ ] `GET /api/v1/posts?type=&page=&limit=` – list with filter & pagination
+- [ ] `GET /api/v1/branches` – list branches
+- [ ] `POST /api/v1/branches` – create branch
+- [ ] `PUT /api/v1/branches/:id` – update branch
+- [ ] `GET /admin/users` – list users (admin only)
+- [ ] `PUT /admin/users/:id/lock` – lock user
+- [ ] `PUT /admin/users/:id/roles` – update roles
+
+### **Phase 1 Frontend Pages**
+- [ ] **Public**: `/about` – render content
+- [ ] **Public**: `/blog` – list published posts
+- [ ] **Public**: `/blog/[slug]` – post detail
+- [ ] **Public**: `/contact` – form + submit
+- [ ] **Admin**: `/admin/users` – UI list + actions
+- [ ] **Admin**: `/admin/branches` – UI CRUD
+- [ ] **Admin**: `/admin/posts` – UI list + publish
+
+### **Security & Config**
+- [ ] `@nestjs/helmet` installed & configured
+- [ ] CORS origin locked down (not `*`)
+- [ ] Swagger `/api/docs` accessible
+
+---
+
+## **🎯 VERIFICATION COMMAND (Sau 5 ngày)**
+
+```bash
+# Backend tests
+cd backend
+npm run test:e2e  # All tests pass
+
+# Frontend build
+cd frontend
+npm run build     # No TypeScript errors
+
+# Manual check
+curl http://localhost:3000/about          # Returns HTML
+curl http://localhost:3000/blog           # Returns JSON posts
+curl -X POST http://localhost:3000/api/v1/branches \
+  -H "Authorization: Bearer <admin_token>" \
+  -d '{"code":"FARM2","name":"Farm 2"}'  # Returns 201
+```
+
+---
+
+## **⏱️ ESTIMATE THỜI GIAN THỰC TẾ**
+
+| Ngày | Nội dung | Thời gian | Rủi ro |
+|------|----------|-----------|--------|
+| Day 1 | Docs + Skeleton | 4-5h | Thấp |
+| Day 2 | Posts CRUD | 6h | Trung bình (có thể gặp lỗi Prisma) |
+| Day 3 | Branches + Users Admin | 5h | Trung bình |
+| Day 4 | Frontend Pages | 6h | Cao (có thể gặp vấn đề routing Next.js) |
+| Day 5 | Security + Testing | 4h | Thấp |
+| **Tổng** | **~25-26 giờ** | **3 ngày nếu làm 8h/ngày** | Đủ thời gian 3-5 ngày |
+
+---
+
+**Bạn sẵn sàng bắt đầu Day 1 chưa? Tôi sẽ tạo file `/docs/architecture-overview.md` ngay bây giờ.**

@@ -9,6 +9,7 @@ import {
     Res,
     UseGuards,
 } from '@nestjs/common';
+import { ThrottlerGuard, Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -30,6 +31,8 @@ export class AuthController {
         return this.authService.register(registerDto);
     }
 
+    @UseGuards(ThrottlerGuard)
+    @Throttle({ default: { limit: 5, ttl: 60000 } })
     @HttpCode(HttpStatus.OK)
     @Post('login')
     async login(
@@ -42,12 +45,16 @@ export class AuthController {
         return this.authService.login(loginDto, req, res, ip);
     }
 
+    @UseGuards(ThrottlerGuard)
+    @Throttle({ default: { limit: 10, ttl: 300000 } })
     @Post('refresh')
     @HttpCode(HttpStatus.OK)
     async refresh(
         @Req() req: Request,
         @Res({ passthrough: true }) res: Response,
     ) {
+        const ip = this.authRateLimitService.getClientIp(req);
+        await this.authRateLimitService.checkRefreshLimit(ip);
         return this.authService.refresh(req, res);
     }
 

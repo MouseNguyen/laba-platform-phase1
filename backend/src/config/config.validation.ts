@@ -27,9 +27,12 @@ export const configValidationSchema = Joi.object({
     CORS_ORIGIN: Joi.string().default('http://localhost:3000'),
 
     // Rate Limiting & Security
+    MAX_CONCURRENT_SESSIONS_PER_USER: Joi.number().integer().min(1).default(5),
     RATE_LIMIT_LOGIN_PER_USER: Joi.number().integer().min(1).default(5),
     RATE_LIMIT_LOGIN_PER_IP: Joi.number().integer().min(1).default(10),
     RATE_LIMIT_REGISTER_PER_IP: Joi.number().integer().min(1).default(3),
+    RATE_LIMIT_REFRESH_PER_IP: Joi.number().integer().min(1).default(10),
+    RATE_LIMIT_REFRESH_DURATION_MINUTES: Joi.number().integer().min(1).default(5),
     ACCOUNT_LOCK_THRESHOLD: Joi.number().integer().min(1).default(5),
     ACCOUNT_LOCK_DURATION_MIN: Joi.number().integer().min(1).default(15),
 
@@ -39,4 +42,17 @@ export const configValidationSchema = Joi.object({
 
     // Monitoring
     ALERT_WEBHOOK_URL: Joi.string().uri().optional().allow(''),
+    METRICS_USER: Joi.string().default('metrics'),
+    METRICS_PASS: Joi.string().default('changeme'),
+
+    // Redis
+    REDIS_HOST: Joi.string().default('localhost'),
+    REDIS_PORT: Joi.number().integer().default(6379),
+    REDIS_PASSWORD: Joi.string().optional().allow('').default(''),
+    REDIS_DB: Joi.number().integer().default(0),
+    REDIS_TIMEOUT_MS: Joi.number().integer().default(3000),
+
+    // Rate Limit
+    RATE_LIMIT_TTL: Joi.number().integer().default(60000),
+    RATE_LIMIT_MAX: Joi.number().integer().default(10),
 });

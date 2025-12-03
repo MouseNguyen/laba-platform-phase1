@@ -8,16 +8,23 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { PassportModule } from '@nestjs/passport';
 import { AuthRateLimitService } from './auth-rate-limit.service';
 import { TokenCleanupService } from './token-cleanup.service';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { MonitoringModule } from '../monitoring/monitoring.module';
+import { RedisThrottlerStorage } from './redis-throttler-storage.service';
+import { RefreshLockService } from './refresh-lock.service';
+import { RedisModule } from '../redis/redis.module';
+import Redis from 'ioredis';
 
 @Module({
     imports: [
         UsersModule,
         PassportModule,
+        MonitoringModule,
+        RedisModule,
         JwtModule.registerAsync({
             imports: [ConfigModule],
             inject: [ConfigService],
             useFactory: (configService: ConfigService): JwtModuleOptions => {
-                // Lấy TTL access token từ ENV (giây), nếu không có thì default = 900s (15 phút)
                 const accessTokenExpiresIn =
                     Number(configService.get('JWT_ACCESS_EXPIRES_IN')) || 900;
 
@@ -29,8 +36,30 @@ import { TokenCleanupService } from './token-cleanup.service';
                 };
             },
         }),
+        ThrottlerModule.forRootAsync({
+            imports: [ConfigModule, RedisModule],
+            inject: [ConfigService, 'REDIS_CLIENT'],
+            useFactory: (config: ConfigService, redis: Redis) => ({
+                throttlers: [
+                    {
+                        ttl: config.get('RATE_LIMIT_TTL') || 60000,
+                        limit: config.get('RATE_LIMIT_MAX') || 10,
+                    },
+                ],
+                storage: new RedisThrottlerStorage(redis),
+                errorMessage: 'Too many requests. Please try again later.',
+            }),
+        }),
     ],
     controllers: [AuthController],
-    providers: [AuthService, JwtStrategy, AuthRateLimitService, TokenCleanupService],
+    providers: [
+        AuthService,
+        JwtStrategy,
+        AuthRateLimitService,
+        TokenCleanupService,
+        RefreshLockService,
+        RedisThrottlerStorage
+    ],
+    exports: [AuthService, RefreshLockService],
 })
 export class AuthModule { }
