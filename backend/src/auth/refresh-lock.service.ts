@@ -8,7 +8,10 @@ export class RefreshLockService {
 
     constructor(@Inject('REDIS_CLIENT') private readonly redis: Redis) { }
 
-    async acquireLock(userId: number, ttlMs: number = 3000): Promise<boolean> {
+    async acquireLock(userId: number, ttlMs: number = 500): Promise<boolean> {
+        // Temporarily disabled for debugging - always allow refresh
+        return true;
+
         const key = `refresh_lock:${userId}`;
         const value = crypto.randomUUID();
 

@@ -68,8 +68,8 @@ export class AuthRateLimitService {
 
     async checkRefreshLimit(ip: string): Promise<void> {
         const now = Date.now();
-        const durationMs = (this.config.get<number>('RATE_LIMIT_REFRESH_DURATION_MINUTES') ?? 5) * 60 * 1000;
-        const maxRequests = this.config.get<number>('RATE_LIMIT_REFRESH_PER_IP') ?? 10;
+        const durationMs = (this.config.get<number>('RATE_LIMIT_REFRESH_DURATION_MINUTES') ?? 1) * 60 * 1000;
+        const maxRequests = this.config.get<number>('RATE_LIMIT_REFRESH_PER_IP') ?? 30;
 
         const record = this.refreshLimitStore.get(ip);
 

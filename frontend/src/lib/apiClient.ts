@@ -132,12 +132,17 @@ apiClient.interceptors.response.use(
       const data = error.response.data as { code?: string };
       if (data?.code === 'SESSION_COMPROMISED') {
         console.error('[Auth] Session compromised detected');
-        // Logout và redirect
         if (onAuthError) {
           onAuthError();
         }
         return Promise.reject(error);
       }
+    }
+
+    // Handle 429 Too Many Requests
+    if (error.response?.status === 429) {
+      console.error('[Auth] Too many requests. Please wait a moment.');
+      return Promise.reject(error);
     }
 
     // Handle 401 Unauthorized

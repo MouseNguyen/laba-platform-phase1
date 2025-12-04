@@ -164,33 +164,46 @@ export class AuthService {
             throw new UnauthorizedException('Invalid refresh token');
         }
 
-        // 1. Reuse Detection
+        // 1. Reuse Detection with Grace Period
         if (tokenRecord.revoked_at) {
-            const detail = {
-                userId: tokenRecord.user_id,
-                email: tokenRecord.user.email,
-                ip: this.getClientIp(req),
-                userAgent: req.headers['user-agent'] || 'unknown',
-                tokenId: tokenRecord.id,
-            };
+            // Allow a 30-second grace period after token rotation
+            // This handles network failures where client didn't receive new token
+            const gracePeriodMs = 30 * 1000; // 30 seconds
+            const timeSinceRevoke = Date.now() - tokenRecord.revoked_at.getTime();
 
-            this.logger.warn(
-                `Token reuse detected for user ${tokenRecord.user_id}`,
-            );
-            this.securityLogger.logAuthEvent('SESSION_COMPROMISED', detail);
-            this.securityLogger.notifyAlertWebhook(
-                'SESSION_COMPROMISED',
-                detail,
-            );
-            this.metricsService.recordAuthEvent('TOKEN_REUSE');
+            if (timeSinceRevoke > gracePeriodMs) {
+                // Genuine reuse attack - revoke all sessions
+                const detail = {
+                    userId: tokenRecord.user_id,
+                    email: tokenRecord.user.email,
+                    ip: this.getClientIp(req),
+                    userAgent: req.headers['user-agent'] || 'unknown',
+                    tokenId: tokenRecord.id,
+                };
 
-            // Revoke ALL tokens của user này (Kill switch)
-            await this.revokeAll(tokenRecord.user_id);
+                this.logger.warn(
+                    `Token reuse detected for user ${tokenRecord.user_id}`,
+                );
+                this.securityLogger.logAuthEvent('SESSION_COMPROMISED', detail);
+                this.securityLogger.notifyAlertWebhook(
+                    'SESSION_COMPROMISED',
+                    detail,
+                );
+                this.metricsService.recordAuthEvent('TOKEN_REUSE');
 
-            throw new ForbiddenException({
-                message: 'Session compromised. Please login again.',
-                code: 'SESSION_COMPROMISED',
-            });
+                // Revoke ALL tokens của user này (Kill switch)
+                await this.revokeAll(tokenRecord.user_id);
+
+                throw new ForbiddenException({
+                    message: 'Session compromised. Please login again.',
+                    code: 'SESSION_COMPROMISED',
+                });
+            } else {
+                // Within grace period - log but continue, will issue new tokens
+                this.logger.debug(
+                    `Token reuse within grace period for user ${tokenRecord.user_id}`,
+                );
+            }
         }
 
         // 2. Check Expiry

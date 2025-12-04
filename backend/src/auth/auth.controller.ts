@@ -46,15 +46,15 @@ export class AuthController {
     }
 
     @UseGuards(ThrottlerGuard)
-    @Throttle({ default: { limit: 10, ttl: 300000 } })
+    @Throttle({ default: { limit: 60, ttl: 60000 } })
     @Post('refresh')
     @HttpCode(HttpStatus.OK)
     async refresh(
         @Req() req: Request,
         @Res({ passthrough: true }) res: Response,
     ) {
-        const ip = this.authRateLimitService.getClientIp(req);
-        await this.authRateLimitService.checkRefreshLimit(ip);
+        // Note: @Throttle decorator above provides rate limiting (60/min)
+        // The in-memory checkRefreshLimit is disabled as it's redundant
         return this.authService.refresh(req, res);
     }
 
