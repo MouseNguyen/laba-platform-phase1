@@ -2,10 +2,12 @@ import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { ConfigService } from '@nestjs/config';
-import { Logger, ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe, VersioningType, RequestMethod } from '@nestjs/common';
 import * as cookieParser from 'cookie-parser';
 import { HelmetOptions } from 'helmet';
 import helmet from 'helmet';
+import { join } from 'path';
+import * as express from 'express';
 
 async function bootstrap() {
     const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -37,6 +39,11 @@ async function bootstrap() {
 
     app.use(helmet(helmetOptions));
 
+    // Static files for uploads (before global prefix)
+    const uploadsPath = join(__dirname, '..', 'uploads');
+    logger.log(`Serving uploads from: ${uploadsPath}`);
+    app.use('/uploads', express.static(uploadsPath));
+
     // Cookie Parser
     const cookieSecret = configService.get<string>('COOKIE_SECRET');
     app.use(cookieParser(cookieSecret));
@@ -58,10 +65,19 @@ async function bootstrap() {
         }),
     );
 
+    // API Versioning & Prefix
+    app.setGlobalPrefix('api', {
+        exclude: ['uploads/:filename', 'uploads/(.*)'],
+    });
+    app.enableVersioning({
+        type: VersioningType.URI,
+        defaultVersion: '1',
+    });
+
     const port = configService.get<number>('PORT') || 3000;
     const nodeEnv = configService.get<string>('NODE_ENV');
 
-    await app.listen(port);
+    await app.listen(port, '0.0.0.0');
 
     logger.log(`Application is running on: ${await app.getUrl()}`);
     logger.log(`Environment: ${nodeEnv}`);

@@ -87,6 +87,36 @@ export default function Header() {
           >
             Cafe
           </Link>
+          <Link
+            href="/#section-about"
+            style={{
+              fontSize: '0.875rem',
+              color: '#94a3b8',
+              textDecoration: 'none',
+            }}
+          >
+            About
+          </Link>
+          <Link
+            href="/blog"
+            style={{
+              fontSize: '0.875rem',
+              color: '#94a3b8',
+              textDecoration: 'none',
+            }}
+          >
+            Blog
+          </Link>
+          <Link
+            href="/contact"
+            style={{
+              fontSize: '0.875rem',
+              color: '#94a3b8',
+              textDecoration: 'none',
+            }}
+          >
+            Contact
+          </Link>
 
           {/* Divider */}
           <div

@@ -87,3 +87,75 @@ export interface ApiError {
   statusCode: number;
   code?: string; // e.g., 'SESSION_COMPROMISED'
 }
+
+// ---------------------------------------------
+// CMS Post Types
+// ---------------------------------------------
+
+export enum PostTypeEnum {
+  PAGE = 'PAGE',
+  BLOG = 'BLOG',
+  NEWS = 'NEWS',
+}
+
+export interface Post {
+  id: number;
+  type: PostTypeEnum;
+  slug: string;
+  title: string;
+  excerpt?: string;
+  content: Record<string, any>;
+  thumbnailUrl?: string;
+  authorId?: number;
+  author?: {
+    id: number;
+    email: string;
+    name?: string;
+  };
+  isPublished: boolean;
+  publishedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string | null;
+}
+
+export interface CreatePostRequest {
+  type: PostTypeEnum;
+  slug: string;
+  title: string;
+  excerpt?: string;
+  content: Record<string, any>;
+  thumbnailUrl?: string;
+  authorId?: number;
+  isPublished?: boolean;
+  publishedAt?: string;
+}
+
+export interface UpdatePostRequest {
+  type?: PostTypeEnum;
+  slug?: string;
+  title?: string;
+  excerpt?: string;
+  content?: Record<string, any>;
+  thumbnailUrl?: string;
+  authorId?: number;
+  isPublished?: boolean;
+  publishedAt?: string;
+}
+
+export interface UploadResponse {
+  url: string;
+  filename: string;
+  mimetype: string;
+  size: number;
+}
+
+export interface PaginatedPostsResponse {
+  items: Post[];
+  page: number;
+  limit: number;
+  totalPages: number;
+  totalItems: number;
+  nextPage?: string;
+  prevPage?: string;
+}

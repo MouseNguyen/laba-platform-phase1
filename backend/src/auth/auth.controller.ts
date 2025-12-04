@@ -17,7 +17,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { Request, Response } from 'express';
 import { AuthRateLimitService } from './auth-rate-limit.service';
 
-@Controller('auth')
+@Controller({ path: 'auth', version: '1' })
 export class AuthController {
     constructor(
         private authService: AuthService,

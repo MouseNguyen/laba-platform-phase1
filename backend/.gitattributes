@@ -1,0 +1,33 @@
+# Set default behavior to automatically normalize line endings
+* text=auto eol=lf
+
+# Explicitly declare text files (will be normalized to LF)
+*.ts text
+*.tsx text
+*.js text
+*.jsx text
+*.json text
+*.md text
+*.yml text
+*.yaml text
+*.sh text eol=lf
+*.sql text
+*.prisma text
+
+# Declare files that should not be modified
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.tar.gz binary
+
+# Ensure shell scripts keep LF even on Windows
+*.sh text eol=lf
+*.bash text eol=lf
+
+# Ensure batch scripts keep CRLF on Windows (if any)
+*.bat text eol=crlf
+*.cmd text eol=crlf

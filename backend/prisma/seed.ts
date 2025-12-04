@@ -3,70 +3,82 @@ import * as argon2 from 'argon2';
 
 const prisma = new PrismaClient();
 
+// Configuration for Argon2
+const argon2Config = { type: argon2.argon2id };
+
 async function main() {
   console.log('🚀 Starting seed...');
 
-  // ========== 1. Clean up ==========
-  await prisma.userToken.deleteMany();
-  await prisma.userRole.deleteMany(); // Xóa liên kết trước
-  await prisma.role.deleteMany(); // Xóa roles cũ
-  await prisma.user.deleteMany();
-  await prisma.branch.deleteMany();
-
-  // ========== 2. Create Roles ==========
-  console.log('👉 Creating roles...');
-  const adminRole = await prisma.role.create({
-    data: {
+  // ========== 1. Roles (Idempotent) ==========
+  console.log('👉 Seeding roles...');
+  const adminRole = await prisma.role.upsert({
+    where: { name: 'admin' },
+    update: {},
+    create: {
       name: 'admin',
       description: 'Administrator with full access',
     },
   });
-  const superAdminRole = await prisma.role.create({
-    data: {
+
+  const superAdminRole = await prisma.role.upsert({
+    where: { name: 'super_admin' },
+    update: {},
+    create: {
       name: 'super_admin',
       description: 'Super Administrator with all privileges',
     },
   });
 
-  // ========== 3. Create Admin User ==========
-  console.log('👉 Creating admin user...');
+  // ========== 2. Admin User (Idempotent) ==========
+  console.log('👉 Seeding admin user...');
   const adminPassword = 'Admin@123456';
-  const password_hash = await argon2.hash(adminPassword, {
-    type: argon2.argon2id,
-  });
+  const password_hash = await argon2.hash(adminPassword, argon2Config);
 
-  const admin = await prisma.user.create({
-    data: {
+  const adminUser = await prisma.user.upsert({
+    where: { email: 'admin@laba.vn' },
+    update: {}, // No-op if exists
+    create: {
       email: 'admin@laba.vn',
-      password_hash,
+      password_hash: password_hash,
       full_name: 'Admin User',
       token_version: 0,
-      // ❌ XÓA: is_active: true,  // KHÔNG TỒN TẠI trong schema
     },
   });
 
-  // ========== 4. Link User to Roles ==========
+  // ========== 3. Link User to Roles (Idempotent) ==========
   console.log('👉 Linking user to roles...');
-  await prisma.userRole.createMany({
-    data: [
-      { user_id: admin.id, role_id: adminRole.id },
-      { user_id: admin.id, role_id: superAdminRole.id },
-    ],
-  });
+  const rolesToLink = [adminRole, superAdminRole];
 
-  // ========== 5. Create Branch ==========
-  console.log('👉 Creating default branch...');
-  const branch = await prisma.branch.create({
-    data: {
+  for (const role of rolesToLink) {
+    await prisma.userRole.upsert({
+      where: {
+        user_id_role_id: {
+          user_id: adminUser.id,
+          role_id: role.id,
+        },
+      },
+      update: {},
+      create: {
+        user_id: adminUser.id,
+        role_id: role.id,
+      },
+    });
+  }
+
+  // ========== 4. Branch (Idempotent) ==========
+  console.log('👉 Seeding default branch...');
+  const branch = await prisma.branch.upsert({
+    where: { code: 'MAIN' },
+    update: {},
+    create: {
       code: 'MAIN',
       name: 'LABA MAIN BRANCH',
       address: 'Đà Lạt',
       phone: null,
-      // ❌ XÓA: description,  // KHÔNG TỒN TẠI trong schema
     },
   });
 
-  // ========== 6. Seed LandingContent ==========
+  // ========== 5. LandingContent (Idempotent) ==========
   console.log('👉 Seeding landing contents...');
   const locale = 'vi';
 
@@ -83,7 +95,6 @@ async function main() {
       status: LandingStatus.published,
       is_active: true,
     },
-    // ... (các block khác giữ nguyên) ...
     {
       key: 'farm',
       title: 'Nông trại – nơi cây được chăm như người nhà',
@@ -166,7 +177,7 @@ async function main() {
         sort_order: item.sort_order,
         status: item.status,
         is_active: item.is_active,
-        updated_by: admin?.id ?? null,
+        updated_by: adminUser.id,
       },
       create: {
         key: item.key,
@@ -182,14 +193,143 @@ async function main() {
         sort_order: item.sort_order,
         status: item.status,
         is_active: item.is_active,
-        updated_by: admin?.id ?? null,
+        updated_by: adminUser.id,
       },
     });
   }
 
-  console.log(`✅ Seed completed:`);
-  console.log(`   Admin: ${admin.email} / ${adminPassword}`);
-  console.log(`   Branch: ${branch.code} - ${branch.name}`);
+  // ========== 6. Posts (Idempotent) ==========
+  console.log('👉 Seeding posts...');
+  const posts = [
+    {
+      slug: 'about-laba-platform',
+      type: 'PAGE',
+      title: 'About Laba Platform',
+      excerpt: 'Learn about our mission and vision.',
+      content: JSON.stringify({
+        blocks: [
+          {
+            type: 'paragraph',
+            data: {
+              text: 'Laba Platform is a comprehensive ecosystem for sustainable farming and tourism.',
+            },
+          },
+        ],
+      }),
+      isPublished: true,
+      publishedAt: new Date(),
+      authorId: adminUser.id,
+    },
+    {
+      slug: 'welcome-to-laba',
+      type: 'BLOG',
+      title: 'Welcome to Laba Farm',
+      excerpt: 'A journey back to nature.',
+      content: JSON.stringify({
+        blocks: [
+          {
+            type: 'paragraph',
+            data: {
+              text: 'We are excited to welcome you to our farm.',
+            },
+          },
+        ],
+      }),
+      isPublished: true,
+      publishedAt: new Date(),
+      authorId: adminUser.id,
+    },
+    {
+      slug: 'organic-farming-tips',
+      type: 'BLOG',
+      title: 'Top 5 Organic Farming Tips',
+      excerpt: 'How to grow your own food sustainably.',
+      content: JSON.stringify({
+        blocks: [
+          {
+            type: 'list',
+            data: {
+              items: ['Use compost', 'Rotate crops', 'Natural pest control'],
+            },
+          },
+        ],
+      }),
+      isPublished: true,
+      publishedAt: new Date(),
+      authorId: adminUser.id,
+    },
+    {
+      slug: 'laba-coffee-launch',
+      type: 'NEWS',
+      title: 'Laba Coffee Now Available',
+      excerpt: 'Taste the freshness of our garden coffee.',
+      content: JSON.stringify({
+        blocks: [
+          {
+            type: 'paragraph',
+            data: {
+              text: 'Our new coffee shop is open for business.',
+            },
+          },
+        ],
+      }),
+      isPublished: true,
+      publishedAt: new Date(),
+      authorId: adminUser.id,
+    },
+    {
+      slug: 'upcoming-events-2025',
+      type: 'NEWS',
+      title: 'Upcoming Events in 2025',
+      excerpt: 'Join us for workshops and tours.',
+      content: JSON.stringify({
+        blocks: [
+          {
+            type: 'paragraph',
+            data: {
+              text: 'Check out our calendar for the upcoming year.',
+            },
+          },
+        ],
+      }),
+      isPublished: false, // Draft
+      publishedAt: null,
+      authorId: adminUser.id,
+    },
+  ];
+
+  for (const post of posts) {
+    await prisma.post.upsert({
+      where: { slug: post.slug },
+      update: {}, // Không update nếu đã tồn tại
+      create: post,
+    });
+  }
+  console.log(`✅ Seeded ${posts.length} posts successfully`);
+  const postCount = await prisma.post.count();
+  console.log(`📊 Total posts in DB: ${postCount}`);
+
+  // ========== 7. Verification ==========
+  await verifySeed();
+}
+
+// Verify data integrity
+async function verifySeed() {
+  const postCount = await prisma.post.count();
+  const publishedCount = await prisma.post.count({ where: { isPublished: true } });
+
+  console.log('\n📋 SEED VERIFICATION REPORT:');
+  console.log(`- Total posts: ${postCount}`);
+  console.log(`- Published posts: ${publishedCount}`);
+  console.log(`- Draft posts: ${postCount - publishedCount}`);
+
+  // Check for orphaned posts (author deleted)
+  const orphaned = await prisma.post.count({ where: { authorId: null } });
+  console.log(`- Orphaned posts: ${orphaned}`);
+
+  if (postCount === 0) {
+    throw new Error('❌ Seed failed: No posts created');
+  }
 }
 
 main()

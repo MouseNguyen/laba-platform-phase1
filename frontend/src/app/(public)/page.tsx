@@ -8,10 +8,11 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import type { LandingBlock, LandingResponse } from '@/lib/types';
-import LandingWrapper from '@/components/LandingWrapper';
+import Header from '@/components/Header';
+import Footer from '@/components/Footer';
 
 // API Base URL
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000';
+const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000') + '/api/v1';
 
 // Fetch landing data (Server-side)
 async function getLandingData(locale: string = 'vi'): Promise<LandingResponse | null> {
@@ -46,15 +47,14 @@ function HeroSection({ block }: { block: LandingBlock }) {
   return (
     <section
       id="section-hero"
-      className="hero-section"
       style={{
         position: 'relative',
-        minHeight: '80vh',
+        height: '100vh',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         overflow: 'hidden',
-        background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+        background: '#0f172a',
       }}
     >
       {/* Background Image */}
@@ -73,12 +73,20 @@ function HeroSection({ block }: { block: LandingBlock }) {
             priority
             style={{ objectFit: 'cover' }}
           />
-          {/* Overlay */}
+          {/* Dark Overlay */}
           <div
             style={{
               position: 'absolute',
               inset: 0,
-              background: 'linear-gradient(to bottom, rgba(15, 23, 42, 0.4) 0%, rgba(15, 23, 42, 0.8) 100%)',
+              background: 'rgba(0, 0, 0, 0.5)',
+            }}
+          />
+          {/* Gradient Overlay */}
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              background: 'linear-gradient(to bottom, rgba(15, 23, 42, 0.3) 0%, rgba(15, 23, 42, 0.8) 100%)',
             }}
           />
         </div>
@@ -88,39 +96,43 @@ function HeroSection({ block }: { block: LandingBlock }) {
       <div
         style={{
           position: 'relative',
-          zIndex: 1,
-          maxWidth: '800px',
+          zIndex: 10,
+          maxWidth: '1000px',
           padding: '2rem',
           textAlign: 'center',
+          color: '#fff',
         }}
       >
         {/* Badge */}
-        <span
-          style={{
-            display: 'inline-block',
-            padding: '0.5rem 1rem',
-            marginBottom: '1.5rem',
-            fontSize: '0.75rem',
-            fontWeight: 600,
-            letterSpacing: '0.1em',
-            textTransform: 'uppercase',
-            color: '#10b981',
-            background: 'rgba(16, 185, 129, 0.1)',
-            border: '1px solid rgba(16, 185, 129, 0.3)',
-            borderRadius: '9999px',
-          }}
-        >
-          🌿 Laba Platform
-        </span>
+        <div style={{ marginBottom: '2rem' }}>
+          <span
+            style={{
+              display: 'inline-block',
+              padding: '0.5rem 1.5rem',
+              fontSize: '0.875rem',
+              fontWeight: 600,
+              letterSpacing: '0.2em',
+              textTransform: 'uppercase',
+              color: '#10b981',
+              background: 'rgba(16, 185, 129, 0.1)',
+              border: '1px solid rgba(16, 185, 129, 0.3)',
+              borderRadius: '9999px',
+              backdropFilter: 'blur(4px)',
+            }}
+          >
+            🌿 Laba Platform
+          </span>
+        </div>
 
         {/* Title */}
         <h1
           style={{
-            fontSize: 'clamp(2rem, 5vw, 3.5rem)',
-            fontWeight: 700,
-            lineHeight: 1.2,
-            marginBottom: '1rem',
-            color: '#f1f5f9',
+            fontSize: 'clamp(2.5rem, 6vw, 5rem)',
+            fontWeight: 800,
+            lineHeight: 1.1,
+            marginBottom: '1.5rem',
+            textShadow: '0 4px 12px rgba(0,0,0,0.3)',
+            letterSpacing: '-0.02em',
           }}
         >
           {block.title}
@@ -130,10 +142,13 @@ function HeroSection({ block }: { block: LandingBlock }) {
         {block.subtitle && (
           <p
             style={{
-              fontSize: 'clamp(1rem, 2vw, 1.25rem)',
-              color: '#94a3b8',
-              marginBottom: '1.5rem',
-              fontStyle: 'italic',
+              fontSize: 'clamp(1.125rem, 2.5vw, 1.5rem)',
+              color: '#e2e8f0',
+              marginBottom: '2rem',
+              fontWeight: 300,
+              maxWidth: '800px',
+              marginLeft: 'auto',
+              marginRight: 'auto',
             }}
           >
             {block.subtitle}
@@ -143,11 +158,12 @@ function HeroSection({ block }: { block: LandingBlock }) {
         {/* Short Story */}
         <p
           style={{
-            fontSize: '1rem',
+            fontSize: '1.125rem',
             lineHeight: 1.8,
             color: '#cbd5e1',
-            maxWidth: '600px',
-            margin: '0 auto 2rem',
+            maxWidth: '700px',
+            margin: '0 auto 3rem',
+            textShadow: '0 2px 4px rgba(0,0,0,0.5)',
           }}
         >
           {block.short_story}
@@ -161,19 +177,20 @@ function HeroSection({ block }: { block: LandingBlock }) {
             style={{
               display: 'inline-flex',
               alignItems: 'center',
-              gap: '0.5rem',
-              padding: '0.75rem 1.5rem',
-              fontSize: '0.875rem',
+              gap: '0.75rem',
+              padding: '1rem 2.5rem',
+              fontSize: '1rem',
               fontWeight: 600,
               color: '#020617',
               background: '#10b981',
-              borderRadius: '8px',
+              borderRadius: '9999px',
               textDecoration: 'none',
-              transition: 'all 0.2s',
+              transition: 'all 0.3s ease',
+              boxShadow: '0 4px 12px rgba(16, 185, 129, 0.4)',
             }}
           >
-            Khám phá thêm
-            <span>→</span>
+            Khám phá ngay
+            <span style={{ fontSize: '1.25rem' }}>→</span>
           </Link>
         )}
       </div>
@@ -185,13 +202,15 @@ function HeroSection({ block }: { block: LandingBlock }) {
           bottom: '2rem',
           left: '50%',
           transform: 'translateX(-50%)',
-          color: '#64748b',
-          fontSize: '0.75rem',
+          color: '#94a3b8',
+          fontSize: '0.875rem',
           textAlign: 'center',
+          zIndex: 10,
+          opacity: 0.8,
         }}
       >
-        <div style={{ marginBottom: '0.5rem' }}>Cuộn xuống</div>
-        <div style={{ animation: 'bounce 2s infinite' }}>↓</div>
+        <div style={{ marginBottom: '0.5rem', letterSpacing: '0.1em', textTransform: 'uppercase', fontSize: '0.75rem' }}>Cuộn xuống</div>
+        <div style={{ fontSize: '1.5rem', animation: 'bounce 2s infinite' }}>↓</div>
       </div>
     </section>
   );
@@ -203,7 +222,7 @@ function HeroSection({ block }: { block: LandingBlock }) {
 function ContentSection({
   block,
   reverse = false,
-  bgColor = 'transparent',
+  bgColor = '#0f172a',
 }: {
   block: LandingBlock;
   reverse?: boolean;
@@ -215,26 +234,29 @@ function ContentSection({
     <section
       id={sectionId}
       style={{
-        padding: '5rem 1.5rem',
+        padding: '8rem 2rem',
         background: bgColor,
+        color: '#f8fafc',
+        position: 'relative',
+        overflow: 'hidden',
       }}
     >
       <div
         style={{
-          maxWidth: '1100px',
+          maxWidth: '1200px',
           margin: '0 auto',
           display: 'flex',
           flexDirection: reverse ? 'row-reverse' : 'row',
           flexWrap: 'wrap',
           alignItems: 'center',
-          gap: '3rem',
+          gap: '5rem',
         }}
       >
-        {/* Image */}
+        {/* Image Side */}
         <div
           style={{
-            flex: '1 1 400px',
-            minWidth: '280px',
+            flex: '1 1 500px',
+            position: 'relative',
           }}
         >
           {block.image_url ? (
@@ -242,9 +264,11 @@ function ContentSection({
               style={{
                 position: 'relative',
                 aspectRatio: '4/3',
-                borderRadius: '16px',
+                borderRadius: '24px',
                 overflow: 'hidden',
-                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4)',
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+                transform: reverse ? 'rotate(2deg)' : 'rotate(-2deg)',
+                transition: 'transform 0.5s ease',
               }}
             >
               <Image
@@ -253,45 +277,62 @@ function ContentSection({
                 fill
                 style={{ objectFit: 'cover' }}
               />
+              {/* Glass overlay effect */}
+              <div style={{ position: 'absolute', inset: 0, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.1)' }} />
             </div>
           ) : (
             <div
               style={{
                 aspectRatio: '4/3',
-                borderRadius: '16px',
+                borderRadius: '24px',
                 background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 color: '#64748b',
-                fontSize: '0.875rem',
+                fontSize: '1rem',
               }}
             >
               Hình ảnh đang được cập nhật
             </div>
           )}
+
+          {/* Decorative element */}
+          <div
+            style={{
+              position: 'absolute',
+              top: '-20px',
+              [reverse ? 'left' : 'right']: '-20px',
+              width: '100px',
+              height: '100px',
+              background: 'rgba(16, 185, 129, 0.2)',
+              borderRadius: '50%',
+              filter: 'blur(40px)',
+              zIndex: -1,
+            }}
+          />
         </div>
 
-        {/* Content */}
+        {/* Content Side */}
         <div
           style={{
             flex: '1 1 400px',
-            minWidth: '280px',
           }}
         >
           {/* Block Key Badge */}
           <span
             style={{
               display: 'inline-block',
-              marginBottom: '1rem',
-              padding: '0.25rem 0.75rem',
-              fontSize: '0.7rem',
-              fontWeight: 600,
-              letterSpacing: '0.15em',
+              marginBottom: '1.5rem',
+              padding: '0.5rem 1rem',
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              letterSpacing: '0.2em',
               textTransform: 'uppercase',
               color: '#10b981',
               background: 'rgba(16, 185, 129, 0.1)',
-              borderRadius: '4px',
+              borderRadius: '8px',
+              border: '1px solid rgba(16, 185, 129, 0.2)',
             }}
           >
             {block.key}
@@ -300,11 +341,12 @@ function ContentSection({
           {/* Title */}
           <h2
             style={{
-              fontSize: 'clamp(1.5rem, 3vw, 2rem)',
-              fontWeight: 700,
-              lineHeight: 1.3,
-              marginBottom: '1rem',
+              fontSize: 'clamp(2rem, 4vw, 3rem)',
+              fontWeight: 800,
+              lineHeight: 1.2,
+              marginBottom: '1.5rem',
               color: '#f1f5f9',
+              letterSpacing: '-0.02em',
             }}
           >
             {block.title}
@@ -314,10 +356,12 @@ function ContentSection({
           {block.subtitle && (
             <p
               style={{
-                fontSize: '1rem',
+                fontSize: '1.25rem',
                 color: '#94a3b8',
-                marginBottom: '1rem',
+                marginBottom: '2rem',
                 fontStyle: 'italic',
+                borderLeft: '4px solid #10b981',
+                paddingLeft: '1rem',
               }}
             >
               {block.subtitle}
@@ -327,10 +371,10 @@ function ContentSection({
           {/* Short Story */}
           <p
             style={{
-              fontSize: '1rem',
+              fontSize: '1.125rem',
               lineHeight: 1.8,
               color: '#cbd5e1',
-              marginBottom: '1.5rem',
+              marginBottom: '2.5rem',
             }}
           >
             {block.short_story}
@@ -344,11 +388,14 @@ function ContentSection({
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '0.5rem',
-                fontSize: '0.875rem',
-                fontWeight: 500,
+                gap: '0.75rem',
+                fontSize: '1rem',
+                fontWeight: 600,
                 color: '#10b981',
                 textDecoration: 'none',
+                paddingBottom: '0.25rem',
+                borderBottom: '2px solid transparent',
+                transition: 'border-color 0.2s',
               }}
             >
               Đọc thêm câu chuyện
@@ -428,50 +475,6 @@ function ErrorMessage() {
 }
 
 // =============================================
-// Footer Component
-// =============================================
-function Footer() {
-  return (
-    <footer
-      style={{
-        padding: '2rem 1.5rem',
-        borderTop: '1px solid rgba(51, 65, 85, 0.5)',
-        background: 'rgba(15, 23, 42, 0.8)',
-      }}
-    >
-      <div
-        style={{
-          maxWidth: '1100px',
-          margin: '0 auto',
-          display: 'flex',
-          flexWrap: 'wrap',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: '1rem',
-          fontSize: '0.875rem',
-          color: '#64748b',
-        }}
-      >
-        <div>
-          © {new Date().getFullYear()} Laba Farm. All rights reserved.
-        </div>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '1rem',
-          }}
-        >
-          <span>Backend: NestJS + Prisma</span>
-          <span>•</span>
-          <span>Frontend: Next.js</span>
-        </div>
-      </div>
-    </footer>
-  );
-}
-
-// =============================================
 // Main Page Component
 // =============================================
 export default async function HomePage() {
@@ -493,27 +496,28 @@ export default async function HomePage() {
   const about = sortedBlocks.find((b) => b.key === 'about');
 
   return (
-    <LandingWrapper>
-      <div
-        style={{
-          minHeight: '100vh',
-          display: 'flex',
-          flexDirection: 'column',
-          background: '#020617',
-          color: '#f9fafb',
-        }}
-      >
-        {/* Main Content */}
-        <main style={{ flex: 1 }}>
-          {/* Hero Section */}
-          {hero && <HeroSection block={hero} />}
+    <div
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        background: '#020617',
+        color: '#f9fafb',
+      }}
+    >
+      <Header />
+
+      {/* Main Content */}
+      <main style={{ flex: 1 }}>
+        {/* Hero Section */}
+        {hero && <HeroSection block={hero} />}
 
         {/* Content Sections */}
         {farm && (
           <ContentSection
             block={farm}
             reverse={false}
-            bgColor="rgba(15, 23, 42, 0.5)"
+            bgColor="#0f172a"
           />
         )}
 
@@ -521,7 +525,7 @@ export default async function HomePage() {
           <ContentSection
             block={homestay}
             reverse={true}
-            bgColor="transparent"
+            bgColor="#1e293b"
           />
         )}
 
@@ -529,7 +533,7 @@ export default async function HomePage() {
           <ContentSection
             block={cafe}
             reverse={false}
-            bgColor="rgba(15, 23, 42, 0.5)"
+            bgColor="#0f172a"
           />
         )}
 
@@ -537,14 +541,13 @@ export default async function HomePage() {
           <ContentSection
             block={about}
             reverse={true}
-            bgColor="transparent"
+            bgColor="#1e293b"
           />
         )}
       </main>
 
       {/* Footer */}
       <Footer />
-      </div>
-    </LandingWrapper>
+    </div>
   );
 }

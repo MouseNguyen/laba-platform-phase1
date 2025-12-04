@@ -4,29 +4,33 @@ import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { LandingModule } from './landing/landing.module';
-
-import { ScheduleModule } from '@nestjs/schedule';
-
-import { CommonModule } from './common/common.module';
-
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
-import { RedisModule } from './redis/redis.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
+// Phase 1 Plugin Modules
+import { BranchesModule } from './branches/branches.module';
+import { CmsModule } from './cms/cms.module';
+import { UsersAdminModule } from './users-admin/users-admin.module';
+import { CommonModule } from './common/common.module';
+import { RedisModule } from './redis/redis.module';
+import { UploadsModule } from './uploads/uploads.module';
 
 @Module({
     imports: [
-        ScheduleModule.forRoot(),
+        // Core Modules
         ConfigModule,
-        CommonModule,
         PrismaModule,
         AuthModule,
         UsersModule,
         LandingModule,
-        RedisModule,
         MonitoringModule,
+        CommonModule,
+        RedisModule,
+        UploadsModule,
+        // Plugin Modules (Phase 1)
+        BranchesModule,
+        CmsModule,
+        UsersAdminModule,
     ],
-    controllers: [AppController],
-    providers: [AppService],
+    controllers: [],
+    providers: [],
 })
 export class AppModule { }

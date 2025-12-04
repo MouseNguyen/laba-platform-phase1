@@ -7,6 +7,18 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ======================================================================
+// MIGRATION CHECKLIST - MUST COMPLETE BEFORE RUNNING:
+// ======================================================================
+// 1. ✅ Backup production DB: pg_dump laba_platform > backup_$(date +%Y%m%d).sql
+// 2. ✅ Check DB connection: npx prisma db pull
+// 3. ✅ Verify no pending migrations: npx prisma migrate status
+// 4. ✅ Run in dev first: npx prisma migrate dev --name add-posts-table
+// 5. ✅ Test seed: npm run db:seed
+// 6. ✅ If all good, deploy to staging: npx prisma migrate deploy
+// 7. ✅ Finally deploy to production: npx prisma migrate deploy
+// ======================================================================
+
 model User {
   id                    Int       @id @default(autoincrement())
   email                 String    @unique
@@ -25,6 +37,7 @@ model User {
   tokens        UserToken[]
   user_roles    UserRole[]
   user_branches UserBranch[]
+  posts         Post[]
 
   @@map("users")
 }
@@ -158,3 +171,41 @@ model LandingContent {
   @@unique([key, locale])
   @@map("landing_contents")
 }
+
+model Post {
+  id            Int       @id @default(autoincrement())
+  type          String    @db.VarChar(20) // Constraint: PAGE, BLOG, NEWS only
+  slug          String    @unique @db.VarChar(255) // SEO-friendly, max 255 chars
+  title         String    @db.VarChar(500) // Max 500 chars, đủ dài cho title
+  excerpt       String?   @db.Text // Có thể dài, dùng Text thay vì VarChar
+  content       Json      // Rich text JSON - validated ở application layer
+  thumbnailUrl  String?   @db.VarChar(1000) @map("thumbnail_url") // URL có thể rất dài
+  authorId      Int?      @map("author_id")
+  isPublished   Boolean   @default(false) @map("is_published")
+  publishedAt   DateTime? @map("published_at") @db.Timestamptz() // Timezone-aware
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz() // Soft delete
+
+  // Relations
+  author        User?     @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  
+  // Indexes for performance
+  @@index([type, isPublished]) // Query phổ biến: filter by type & published status
+  @@index([authorId]) // Query by author
+  @@index([slug]) // Already unique, but explicit index helps clarity
+  @@index([deletedAt]) // Soft delete queries
+  @@map("posts")
+}
+
+// ROLLBACK INSTRUCTIONS (nếu migration fail):
+// Option 1: npx prisma migrate resolve --rolled-back "add-posts-table"
+// Option 2: Restore DB: psql laba_platform < backup_YYYYMMDD.sql
+
+// GIT WORKFLOW:
+// 1. Create branch: git checkout -b feature/2.1-add-post-model
+// 2. Stage schema: git add prisma/schema.prisma
+// 3. Stage seed: git add prisma/seed.ts
+// 4. Commit: git commit -m "feat(db): add Post model and seed data for CMS"
+// 5. Push: git push origin feature/2.1-add-post-model
+// 6. Create PR with title: "Task 2.1: Add Post Model to Prisma Schema"

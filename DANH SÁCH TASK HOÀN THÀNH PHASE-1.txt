@@ -1,0 +1,713 @@
+# 🎯 DANH SÁCH TASK HOÀN THÀNH PHASE 0-1 (CHO CLAUDE 4.5)
+
+Dưới đây là **danh sách task chi tiết** theo đúng kế hoạch 5 ngày. Mỗi task có prompt để bạn copy-paste vào Claude.
+
+---
+
+## **📅 DAY 1: PHASE 0 - TÀI LIỆU & SKELETON**
+
+### **Task 1.1: Tạo `/docs/architecture-overview.md`**
+```prompt
+Viết file tài liệu `/docs/architecture-overview.md` cho dự án Laba Platform với nội dung:
+
+**Mục tiêu**: Mô tả tổng quan kiến trúc hệ thống, stack kỹ thuật, luồng dữ liệu và quy ước phát triển.
+
+**Nội dung cần có**:
+1. Tầm nhìn: Nền tảng đa chi nhánh (Farm, Homestay, Cafe) với booking, e-commerce, POS, CRM
+2. Kiến trúc: Plugin-based (Core Platform + Module)
+3. Tech Stack:
+   - Backend: NestJS (Modular Monolith), Prisma, PostgreSQL, Redis, JWT
+   - Frontend: Next.js 14 (App Router), TypeScript, Tailwind CSS
+   - Monitoring: Prometheus + Grafana
+   - Testing: Jest, k6, Pact
+4. Luồng Auth: JWT Access Token (memory) + Refresh Token (HttpOnly Cookie) + Token versioning
+5. Luồng Request: Frontend → API Gateway (sẽ có) → NestJS Modules → PostgreSQL
+6. Quy ước Module: Mỗi module riêng biệt (auth, users, branches, posts, booking, shop)
+7. Cấu trúc thư mục backend và frontend hiện tại
+
+**Tham khảo**: File `LabaPlatform_README_TongQuan_DuAn.docx` và `TÓM TẮT DỰ ÁN LABA PLATFORM` đã cung cấp.
+
+**Đầu ra**: Markdown file với tiêu đề rõ ràng, code block ví dụ config nếu cần.
+```
+
+### **Task 1.2: Tạo `/docs/api-conventions.md`**
+```prompt
+Viết file `/docs/api-conventions.md` quy định chuẩn API cho toàn dự án:
+
+**Nội dung**:
+1. **Response Format**:
+   ```json
+   {
+     "statusCode": 200,
+     "message": "Thành công",
+     "data": {},
+     "meta": { "page": 1, "limit": 10, "total": 100 }
+   }
+   ```
+2. **Error Codes**: 
+   - 400: Bad Request (validation error)
+   - 401: Unauthorized
+   - 403: Forbidden (permission denied)
+   - 404: Not Found
+   - 409: Conflict (duplicate, concurrency)
+   - 422: Unprocessable Entity
+   - 500: Internal Server Error
+3. **Pagination**: `page`, `limit`, `total`, `totalPages`
+4. **Filter Pattern**: `GET /resource?field=value&sort=field:asc`
+5. **Timestamp**: Luôn dùng ISO 8601, timezone Asia/Ho_Chi_Minh
+6. **ID Format**: Số nguyên (Int) cho DB ID, UUID cho public reference nếu cần
+7. **Soft Delete**: Không dùng `DELETE` hard delete, dùng `PATCH` với `deletedAt`
+8. **Versioning**: `/api/v1/` prefix cho tất cả endpoints
+
+**Tham khảo**: Quy ước đã có trong codebase hiện tại (xem `auth` module).
+
+**Đầu ra**: Markdown file với bảng biểu và ví dụ rõ ràng.
+```
+
+### **Task 1.3: Tạo ESLint & Prettier config**
+```prompt
+Tạo file cấu hình code style cho backend:
+
+1. **File**: `/backend/.eslintrc.js` với config NestJS standard:
+   - extends: ['@nestjs/eslint-config']
+   - rules: semicolon: always, single quotes, no trailing spaces
+   - ignorePatterns: ['dist', 'node_modules', '*.js']
+
+2. **File**: `/backend/.prettierrc`:
+   ```json
+   {
+     "singleQuote": true,
+     "trailingComma": "all",
+     "semi": true,
+     "tabWidth": 2,
+     "printWidth": 100
+   }
+   ```
+
+3. **Cập nhật `package.json`** thêm scripts:
+   ```json
+   "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
+   "format": "prettier --write \"src/**/*.ts\""
+   ```
+
+**Đầu ra**: 2 file config + script npm (chỉ cần chỉ ra cần thêm gì vào package.json).
+```
+
+### **Task 1.4: Tạo `/backend/README.md`**
+```prompt
+Viết file `/backend/README.md` hướng dẫn setup development:
+
+**Nội dung**:
+1. Prerequisites: Node.js 20+, PostgreSQL 15+, Redis 7+
+2. Installation: `npm install`, `npx prisma generate`
+3. Database: `npx prisma migrate reset --force` (chạy seed)
+4. Environment: Copy `.env.example` → `.env`, chạy `npm run generate-secrets`
+5. Running dev: `npm run start:dev` (port 3000)
+6. Running tests: `npm run test:e2e`
+7. API docs: Swagger tại `/api/docs`
+8. Monitoring: Prometheus metrics tại `/metrics` (cần auth)
+9. Project structure: Giải thích các thư mục chính (`src/auth`, `src/users`, v.v.)
+
+**Tham khảo**: File `.env` template trong tóm tắt dự án.
+
+**Đầu ra**: Markdown file với code block commands.
+```
+
+### **Task 1.5: Tạo module skeleton**
+```prompt
+Tạo 3 module skeleton trống (chưa logic) để chuẩn bị cho Day 2-3:
+
+1. **Module CMS**: `/backend/src/cms/cms.module.ts`
+   - Import PrismaModule, export PostsService (sẽ tạo sau)
+   - Structure: controllers/, services/, dtos/, entities/
+
+2. **Module Branches**: `/backend/src/branches/branches.module.ts`
+   - Tương tự, export BranchesService
+
+3. **Module Users Admin**: `/backend/src/users-admin/users-admin.module.ts`
+   - Tách riêng khỏi auth module, chỉ dành cho admin operations
+
+**Đầu ra**: 3 file module TypeScript với cấu trúc NestJS chuẩn (imports, controllers, providers).
+```
+
+### **Task 1.6: Tạo frontend folder structure**
+```prompt
+Tạo cấu trúc thư mục frontend chuẩn:
+
+```
+frontend/
+├── src/app/(public)/          # Website public
+│   ├── about/page.tsx
+│   ├── blog/page.tsx
+│   ├── blog/[slug]/page.tsx
+│   └── contact/page.tsx
+├── src/app/(admin)/           # Admin portal
+│   ├── layout.tsx
+│   ├── users/page.tsx
+│   ├── branches/page.tsx
+│   └── posts/page.tsx
+├── src/components/ui/         # UI components chung
+│   ├── Button.tsx
+│   ├── Table.tsx
+│   └── Badge.tsx
+├── src/lib/api/               # API clients
+│   ├── posts.ts
+│   ├── branches.ts
+│   └── users-admin.ts
+└── src/types/                 # TypeScript types
+    ├── post.ts
+    ├── branch.ts
+    └── user.ts
+```
+
+**Đầu ra**: Tree structure + tạo các file `.gitkeep` hoặc file trống có tên rõ ràng.
+```
+
+---
+
+## **📅 DAY 2: PHASE 1 - CMS POSTS BACKEND**
+
+### **Task 2.1: Cập nhật Prisma schema Post**
+```prompt
+Cập nhật file `/backend/prisma/schema.prisma` thêm model Post:
+
+```prisma
+model Post {
+  id            Int       @id @default(autoincrement())
+  type          String    // PAGE, BLOG, NEWS
+  slug          String    @unique
+  title         String
+  excerpt       String?
+  content       Json      // Rich text JSON
+  thumbnailUrl  String?   @map("thumbnail_url")
+  authorId      Int?      @map("author_id")
+  isPublished   Boolean   @default(false) @map("is_published")
+  publishedAt   DateTime? @map("published_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+  
+  author        User?     @relation(fields: [authorId], references: [id])
+  
+  @@index([type])
+  @@index([isPublished])
+  @@map("posts")
+}
+```
+
+**Yêu cầu**:
+- Thêm vào schema hiện có (giữ nguyên các model khác)
+- Chạy migration: `npx prisma migrate dev --name add-posts-table`
+- Cập nhật `prisma/seed.ts` để seed 3-5 bài viết mẫu (type: PAGE, BLOG)
+
+**Đầu ra**: schema.prisma đã cập nhật + migration file + seed code.
+```
+
+### **Task 2.2: Tạo DTOs cho Posts**
+```prompt
+Tạo DTOs cho module CMS trong `/backend/src/cms/dtos/`:
+
+1. **create-post.dto.ts**:
+   - Fields: type, slug, title, excerpt, content(JSON), thumbnailUrl, authorId
+   - Validation: @IsString(), @IsNotEmpty(), @IsOptional(), @IsBoolean()
+
+2. **update-post.dto.ts**:
+   - Partial của create-post.dto
+   - Dùng @nestjs/mapped-types
+
+3. **query-posts.dto.ts**:
+   - Fields: type?, page?, limit?, isPublished?, authorId?
+   - Validation: @IsInt(), @Min(1), @IsOptional()
+
+**Tham khảo**: DTOs trong `auth/dto/` (cách dùng class-validator).
+
+**Đầu ra**: 3 file DTO với validation đầy đủ.
+```
+
+### **Task 2.3: Tạo PostsService**
+```prompt
+Tạo `/backend/src/cms/posts.service.ts` với các methods:
+
+- `create(createPostDto, userId): Promise<Post>` 
+  - Tạo post mới, set authorId từ user hiện tại
+  - Kiểm tra slug unique (catch Prisma P2002)
+
+- `findAll(query: QueryPostsDto): Promise<{data: Post[], meta: {page, limit, total}}>`
+  - Filter theo type, isPublished, authorId
+  - Pagination với prisma skip/take
+  - Soft delete: chỉ lấy deletedAt IS NULL
+
+- `findOne(slug: string): Promise<Post>`
+  - Lấy post theo slug, throw NotFoundException nếu không tồn tại
+
+- `update(id: number, updatePostDto): Promise<Post>`
+  - Cập nhật post, không cho phép đổi slug nếu đã published
+
+- `remove(id: number): Promise<void>`
+  - Soft delete: set deletedAt = now() thay vì xóa cứng
+
+- `publishToggle(id: number): Promise<Post>`
+  - Toggle isPublished, nếu publish thì set publishedAt = now()
+
+**Lưu ý**: Dùng PrismaService đã có, trả về dạng plain object không chứa deletedAt.
+
+**Đầu ra**: 1 service file với 6 methods đầy đủ.
+```
+
+### **Task 2.4: Tạo PostsController**
+```prompt
+Tạo `/backend/src/cms/posts.controller.ts` với endpoints:
+
+- `GET /api/v1/posts?type=&page=&limit=`
+  - Dùng @Query() với QueryPostsDto
+  - Trả về format chuẩn: {statusCode, message, data, meta}
+
+- `GET /api/v1/posts/:slug`
+  - Public: không cần auth
+  - Chỉ trả về post có isPublished = true hoặc user là admin
+
+- `POST /api/v1/posts`
+  - @UseGuards(JwtAuthGuard, PermissionGuard)
+  - Permission: 'post.create'
+  - Lấy userId từ @CurrentUser() decorator
+
+- `PUT /api/v1/posts/:id`
+  - Permission: 'post.update'
+  - Không cho phép cập nhật post đã bị soft delete
+
+- `DELETE /api/v1/posts/:id`
+  - Permission: 'post.delete'
+  - Soft delete: gọi postsService.remove()
+
+- `PATCH /api/v1/posts/:id/publish`
+  - Permission: 'post.publish'
+  - Toggle publish status
+
+**Đầu ra**: 1 controller file với 6 routes đầy đủ auth & permission.
+```
+
+---
+
+## **📅 DAY 3: PHASE 1 - BRANCHES & USERS-ADMIN BACKEND**
+
+### **Task 3.1: Cập nhật Prisma schema Branch**
+```prompt
+Cập nhật model Branch trong `/backend/prisma/schema.prisma`:
+
+```prisma
+model Branch {
+  id          Int       @id @default(autoincrement())
+  code        String    @unique
+  name        String
+  type        String    // FARM, HOMESTAY, CAFE, SHOP
+  settings    Json?     // JSONB config
+  isActive    Boolean   @default(true) @map("is_active")
+  address     String?
+  phone       String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+  
+  users       UserBranch[]
+  bookings    Booking[] // (tạm thêm, sẽ dùng sau)
+  
+  @@index([type])
+  @@index([isActive])
+  @@map("branches")
+}
+```
+
+**Yêu cầu**:
+- Thêm vào schema hiện có
+- Chạy migration: `npx prisma migrate dev --name update-branches-table`
+- Cập nhật seed: tạo 3 chi nhánh mẫu (FARM, HOMESTAY, CAFE)
+
+**Đầu ra**: schema đã cập nhật + migration file.
+```
+
+### **Task 3.2: Tạo Branches CRUD**
+```prompt
+Tạo module Branches đầy đủ:
+
+**DTOs** (`/backend/src/branches/dtos/`):
+- `create-branch.dto.ts`: code, name, type, settings, address, phone
+- `update-branch.dto.ts`: Partial của create
+- Validation: @IsString(), @IsEnum(['FARM','HOMESTAY','CAFE','SHOP'])
+
+**Service** (`branches.service.ts`):
+- `create()`, `findAll()`, `findOne()`, `update()`, `remove()` (soft delete)
+- Kiểm tra code unique (P2002)
+
+**Controller** (`branches.controller.ts`):
+- `GET /api/v1/branches` - list all (có thể filter isActive)
+- `GET /api/v1/branches/:id` - detail
+- `POST /api/v1/branches` - Permission: 'branch.create'
+- `PUT /api/v1/branches/:id` - Permission: 'branch.update'
+- `DELETE /api/v1/branches/:id` - Permission: 'branch.delete', soft delete
+
+**Đầu ra**: 3 files + cập nhật `branches.module.ts`.
+```
+
+### **Task 3.3: Tạo Users-Admin Controller**
+```prompt
+Tạo `/backend/src/users-admin/users-admin.controller.ts` (chỉ controller, dùng UsersService hiện có):
+
+- `GET /api/v1/admin/users?page=&limit=&search=`
+  - Permission: 'user.view'
+  - Search theo email/name
+  - Trả về: {id, email, name, roles, isLocked, createdAt}
+
+- `GET /api/v1/admin/users/:id`
+  - Permission: 'user.view'
+  - Trả về chi tiết user (không bao gồm password_hash)
+
+- `PUT /api/v1/admin/users/:id/lock`
+  - Permission: 'user.lock'
+  - Set `lock_until = now() + 15 minutes`
+  - Log action vào security_logger
+
+- `PUT /api/v1/admin/users/:id/unlock`
+  - Permission: 'user.lock'
+  - Set `lock_until = null`, `failed_login_attempts = 0`
+
+- `PUT /api/v1/admin/users/:id/roles`
+  - Permission: 'user.update_roles'
+  - Body: {roleIds: number[]}
+  - Replace all user roles (xóa cũ, thêm mới)
+
+**Lưu ý**: Dùng `@Transactional()` nếu cần, dùng UserService hiện có.
+
+**Đầu ra**: 1 controller file.
+```
+
+### **Task 3.4: Seed permissions mới**
+```prompt
+Cập nhật `/backend/prisma/seed.ts` thêm permissions:
+
+```typescript
+const permissions = [
+  // ... permissions cũ
+  { code: 'post.create', name: 'Create Post', module: 'CMS' },
+  { code: 'post.update', name: 'Update Post', module: 'CMS' },
+  { code: 'post.delete', name: 'Delete Post', module: 'CMS' },
+  { code: 'post.publish', name: 'Publish Post', module: 'CMS' },
+  { code: 'branch.create', name: 'Create Branch', module: 'BRANCH' },
+  { code: 'branch.update', name: 'Update Branch', module: 'BRANCH' },
+  { code: 'branch.delete', name: 'Delete Branch', module: 'BRANCH' },
+  { code: 'user.view', name: 'View Users', module: 'USER' },
+  { code: 'user.lock', name: 'Lock/Unlock User', module: 'USER' },
+  { code: 'user.update_roles', name: 'Update User Roles', module: 'USER' },
+];
+
+// Gán cho role ADMIN và SUPER_ADMIN
+```
+
+**Đầu ra**: seed.ts đã cập nhật, chạy lại seed để áp dụng.
+```
+
+---
+
+## **📅 DAY 4: PHASE 1 - FRONTEND PUBLIC & ADMIN PAGES**
+
+### **Task 4.1: Tạo Public Page - About**
+```prompt
+Tạo `/frontend/src/app/(public)/about/page.tsx`:
+
+**Yêu cầu**:
+- Static content (hard-code tạm, sau này lấy từ API posts type=PAGE)
+- Layout: Header, Hero section, Story, Team, Values
+- Dùng Tailwind CSS, responsive
+- Không cần auth
+
+**Tham khảo**: Landing page hiện tại để giữ style nhất quán.
+
+**Đầu ra**: 1 file Next.js page component.
+```
+
+### **Task 4.2: Tạo Public Page - Blog List**
+```prompt
+Tạo `/frontend/src/app/(public)/blog/page.tsx`:
+
+**Yêu cầu**:
+- Fetch posts từ API: `GET /api/v1/posts?type=BLOG&isPublished=true&page=1&limit=10`
+- Hiển thị danh sách cards: thumbnail, title, excerpt, publishedAt, author
+- Pagination: Load more hoặc numbered pagination
+- Link đến detail page: `/blog/[slug]`
+- Loading state: Skeleton cards
+- Error handling: Hiện thông báo nếu API fail
+
+**API Client**: Tạo `/frontend/src/lib/api/posts.ts` với hàm `getPosts(query)`
+
+**Đầu ra**: 1 page component + 1 api client file.
+```
+
+### **Task 4.3: Tạo Public Page - Blog Detail**
+```prompt
+Tạo `/frontend/src/app/(public)/blog/[slug]/page.tsx`:
+
+**Yêu cầu**:
+- Dynamic route với slug
+- Fetch post detail: `GET /api/v1/posts/${slug}`
+- Render content JSON (dùng tailwind typography hoặc custom renderer)
+- SEO: Next.js generateMetadata()
+- Not found: redirect về /blog nếu post không tồn tại
+- Loading: Skeleton
+
+**Tham khảo**: Cách fetch data trong Next.js App Router.
+
+**Đầu ra**: 1 dynamic page component.
+```
+
+### **Task 4.4: Tạo Public Page - Contact**
+```prompt
+Tạo `/frontend/src/app/(public)/contact/page.tsx`:
+
+**Yêu cầu**:
+- Form: name, email, phone, subject, message
+- Submit: POST `/api/v1/contact` (chưa có API, tạm console.log)
+- Validation: frontend (Zod hoặc Formik + Yup)
+- Success message sau submit
+- Layout: Form bên trái, thông tin liên hệ bên phải
+
+**API Client**: Tạo `/frontend/src/lib/api/contact.ts` vì sau này sẽ có API.
+
+**Đầu ra**: 1 page component với form đầy đủ validation.
+```
+
+### **Task 4.5: Tạo Admin Page - Users Management**
+```prompt
+Tạo `/frontend/src/app/(admin)/users/page.tsx`:
+
+**Yêu cầu**:
+- Protected: Chỉ admin/super_admin (dùng AuthContext)
+- Fetch users: `GET /api/v1/admin/users?page=&limit=&search=`
+- Table: id, email, name, roles, status (locked/active), createdAt
+- Actions: Lock/Unlock button mỗi row
+- Search bar: Tìm theo email/name
+- Pagination: Bottom table
+- Permission check: Ẩn actions nếu không có 'user.lock' permission
+
+**API Client**: `/frontend/src/lib/api/users-admin.ts` với các hàm:
+- `getUsers(query)`
+- `lockUser(id)`
+- `unlockUser(id)`
+
+**Đầu ra**: 1 protected page + API client.
+```
+
+### **Task 4.6: Tạo Admin Page - Branches CRUD**
+```prompt
+Tạo `/frontend/src/app/(admin)/branches/page.tsx`:
+
+**Yêu cầu**:
+- Protected + Permission: 'branch.view' (list), 'branch.create' (add)
+- Table hiển thị branches: code, name, type, isActive, address
+- Modal form: Create/Edit branch (fields: code, name, type select, settings JSON, address, phone)
+- Actions: Edit (yêu cầu 'branch.update'), Delete (yêu cầu 'branch.delete' - soft delete)
+- Refresh data sau CRUD
+
+**API Client**: `/frontend/src/lib/api/branches.ts` với CRUD methods
+
+**Đầu ra**: 1 page component với table + modal form.
+```
+
+### **Task 4.7: Tạo Admin Page - Posts Management**
+```prompt
+Tạo `/frontend/src/app/(admin)/posts/page.tsx`:
+
+**Yêu cầu**:
+- Protected + Permission: 'post.view'
+- Table: posts với columns: title, type, author, isPublished, publishedAt
+- Actions:
+  - Publish/Unpublish toggle (yêu cầu 'post.publish')
+  - Edit (yêu cầu 'post.update')
+  - Delete (yêu cầu 'post.delete' - soft delete)
+- Create new post: Link đến form (có thể làm sau hoặc modal)
+- Filter: Theo type (select), isPublished (checkbox)
+
+**API Client**: `/frontend/src/lib/api/posts.ts` (admin methods)
+
+**Đầu ra**: 1 admin page component.
+```
+
+---
+
+## **📅 DAY 5: SECURITY & TESTING**
+
+### **Task 5.1: Cài đặt và cấu hình Helmet**
+```prompt
+Thực hiện bảo mật với Helmet:
+
+1. **Cài package**: `npm install @nestjs/helmet`
+
+2. **Cập nhật `/backend/src/main.ts`**:
+   ```typescript
+   import helmet from '@nestjs/helmet';
+   
+   app.use(helmet({
+     contentSecurityPolicy: false, // Tắt vì Next.js streaming
+     crossOriginEmbedderPolicy: false,
+     crossOriginResourcePolicy: { policy: "cross-origin" },
+     referrerPolicy: { policy: "no-referrer" },
+   }));
+   ```
+
+3. **Kiểm tra**: Sau khi cài, API vẫn hoạt động, không bị block CORS.
+
+**Đầu ra**: main.ts đã cập nhật, package.json thêm dependency.
+```
+
+### **Task 5.2: Rate limit global**
+```prompt
+Thêm rate limit toàn cục cho backend:
+
+**Cập nhật `/backend/src/main.ts`**:
+```typescript
+import { ThrottlerModule } from '@nestjs/throttler';
+
+// Trong imports
+ThrottlerModule.forRoot([{
+  ttl: 60000,
+  limit: 100, // 100 requests per minute per IP
+  skipSuccessfulRequests: false,
+}]),
+```
+
+**Hoặc** nếu dùng Redis rate limit đã có, đảm bảo:
+- `ENABLE_REDIS_RATE_LIMIT=true` trong .env
+- Guard áp dụng cho tất cả routes (trừ /auth/login, /auth/register)
+
+**Đầu ra**: Config rate limit đã áp dụng toàn app.
+```
+
+### **Task 5.3: Tạo E2E test Phase 1 Complete**
+```prompt
+Tạo file `/backend/test/phase1-complete.e2e-spec.ts`:
+
+**Test flow**:
+1. Register new user → login → get token
+2. Create post (with auth) → verify 201
+3. Publish post → verify isPublished=true
+4. Get post list (public) → verify xuất hiện trong list
+5. Create branch (admin) → verify 201
+6. Lock user → verify lock_until được set
+7. Unlock user → verify lock_until=null
+
+**Sử dụng**:
+- `supertest` để gọi HTTP
+- PrismaService để kiểm tra DB trực tiếp
+- JWT token lấy từ login response
+
+**Threshold**: All tests pass, coverage >80% cho các module mới.
+
+**Đầu ra**: 1 file E2E test với describe/it blocks rõ ràng.
+```
+
+### **Task 5.4: Verify checklist**
+```prompt
+Kiểm tra hoàn thiện Phase 0-1:
+
+**Chạy lệnh verify**:
+```bash
+# Backend
+cd backend
+npm run test:e2e
+npm run lint
+npm run build
+
+# Frontend
+cd frontend
+npm run build  # Không có TypeScript error
+```
+
+**Manual test**:
+1. `curl http://localhost:3000/api/v1/about` → return page content
+2. `curl http://localhost:3000/api/v1/posts?type=BLOG` → return published posts
+3. `curl -X POST http://localhost:3000/api/v1/branches -H "Authorization: Bearer <admin_token>" -d '{"code":"TEST","name":"Test Branch","type":"FARM"}'` → 201 Created
+
+**Checklist**: Đánh dấu các items trong checklist Day 5 của file "Gói công việc need to complete.txt"
+
+**Đầu ra**: Báo cáo ngắn các test passed/failed.
+```
+
+---
+
+## **🎯 TASK BỔ SUNG**
+
+### **Task 6.1: Tạo `docker-compose.dev.yml`**
+```prompt
+Tạo file `/backend/docker-compose.dev.yml`:
+
+```yaml
+version: '3.8'
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: laba_platform_dev
+      POSTGRES_USER: laba_user
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  mailhog:
+    image: mailhog/mailhog
+    ports:
+      - "8025:8025" # Web UI
+      - "1025:1025" # SMTP
+
+volumes:
+  postgres_data:
+```
+
+**Đầu ra**: 1 file docker-compose để dev team dễ setup.
+```
+
+### **Task 6.2: Cài đặt Swagger**
+```prompt
+Cài đặt Swagger cho API documentation:
+
+1. **Cài package**: `npm install @nestjs/swagger swagger-ui-express`
+
+2. **Cập nhật `main.ts`**:
+   ```typescript
+   import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+   
+   const config = new DocumentBuilder()
+     .setTitle('Laba Platform API')
+     .setVersion('1.0')
+     .addBearerAuth()
+     .build();
+   const document = SwaggerModule.createDocument(app, config);
+   SwaggerModule.setup('api/docs', app, document);
+   ```
+
+3. **Decorators**: Thêm @ApiTags, @ApiBearerAuth, @ApiResponse vào controllers (có thể làm sau)
+
+**Đầu ra**: Swagger UI chạy tại `http://localhost:3000/api/docs`.
+```
+
+---
+
+## **📋 HƯỚNG DẪN SỬ DỤNG VỚI CLAUDE**
+
+**Workflow**:
+1. Copy từng prompt vào Claude 4.5
+2. Yêu cầu Claude generate code **đầy đủ** (không summary)
+3. Sau mỗi task, **commit ngay** vào git với message rõ ràng
+4. Chạy verify command sau từng nhóm task
+5. Nếu có lỗi, paste error vào Claude để fix
+
+**Lưu ý quan trọng**:
+- Luôn nhắc Claude **"Viết code đầy đủ, không summary"**
+- Nếu task liên quan DB, nhắc **"Run migration và seed sau khi update schema"**
+- Nếu task frontend, nhắc **"Dùng TypeScript, Axios, React Context đã có"**
+
+Bạn muốn tôi bắt đầu với **Task 1.1** ngay không?

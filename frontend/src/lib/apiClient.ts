@@ -20,7 +20,7 @@ import type {
 
 // Base URL từ environment variable
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000';
+  (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000') + '/api/v1';
 
 // =============================================
 // Module-level state
@@ -117,7 +117,7 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   // Success response
   (response) => response,
-  
+
   // Error response
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
@@ -161,38 +161,49 @@ apiClient.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        // Gọi refresh endpoint
-        const response = await axios.post<RefreshResponse>(
-          `${API_BASE_URL}/auth/refresh`,
-          {},
-          { withCredentials: true }
-        );
+        // Gọi refresh endpoint with Web Locks to prevent multi-tab race conditions
+        let response;
+        if (typeof navigator !== 'undefined' && navigator.locks) {
+          response = await navigator.locks.request('auth_refresh_lock', async () => {
+            return axios.post<RefreshResponse>(
+              `${API_BASE_URL}/auth/refresh`,
+              {},
+              { withCredentials: true }
+            );
+          });
+        } else {
+          response = await axios.post<RefreshResponse>(
+            `${API_BASE_URL}/auth/refresh`,
+            {},
+            { withCredentials: true }
+          );
+        }
 
         const newToken = response.data.access_token;
-        
+
         // Update access token
         setAccessToken(newToken);
-        
+
         // Process queue với token mới
         processQueue(null, newToken);
-        
+
         // Retry original request với token mới
         if (originalRequest.headers) {
           originalRequest.headers.Authorization = `Bearer ${newToken}`;
         }
-        
+
         return apiClient(originalRequest);
       } catch (refreshError) {
         // Refresh failed
         console.error('[Auth] Refresh token failed:', refreshError);
         processQueue(refreshError as Error, null);
-        
+
         // Clear token và gọi auth error callback
         setAccessToken(null);
         if (onAuthError) {
           onAuthError();
         }
-        
+
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;
