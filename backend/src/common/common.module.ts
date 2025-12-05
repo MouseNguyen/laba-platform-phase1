@@ -1,11 +1,12 @@
 import { Module, Global } from '@nestjs/common';
-import { SecurityLoggerService } from './security-logger.service';
 import { ConfigModule } from '@nestjs/config';
+
+import { SecurityLoggerService } from './security-logger.service';
 
 @Global()
 @Module({
-    imports: [ConfigModule],
-    providers: [SecurityLoggerService],
-    exports: [SecurityLoggerService],
+  imports: [ConfigModule],
+  providers: [SecurityLoggerService],
+  exports: [SecurityLoggerService],
 })
-export class CommonModule { }
+export class CommonModule {}

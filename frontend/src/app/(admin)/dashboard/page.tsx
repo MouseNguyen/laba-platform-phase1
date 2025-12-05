@@ -1,274 +1,503 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
+import apiClient from '@/lib/apiClient';
 
-const stats = [
-    {
-        label: 'Total Users',
-        value: 42,
-        change: '+12%',
-        positive: true,
-        icon: '👥',
-        gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
-    },
-    {
-        label: 'Active Branches',
-        value: 5,
-        change: '+2',
-        positive: true,
-        icon: '🏢',
-        gradient: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)'
-    },
-    {
-        label: 'Published Posts',
-        value: 12,
-        change: '+3',
-        positive: true,
-        icon: '📝',
-        gradient: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)'
-    },
-    {
-        label: 'Pending Bookings',
-        value: 3,
-        change: '-1',
-        positive: false,
-        icon: '📅',
-        gradient: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)'
-    },
-];
+interface UserRole {
+    id: number;
+    name: string;
+}
 
-const recentActivity = [
-    { id: 1, action: 'New user registered', user: 'john@example.com', time: '2 minutes ago', icon: '👤' },
-    { id: 2, action: 'Branch updated', user: 'admin@laba.vn', time: '15 minutes ago', icon: '🏢' },
-    { id: 3, action: 'Post published', user: 'editor@laba.vn', time: '1 hour ago', icon: '📝' },
-    { id: 4, action: 'Booking confirmed', user: 'guest@gmail.com', time: '2 hours ago', icon: '✅' },
+interface User {
+    id: number;
+    email: string;
+    lockUntil?: string | null;
+    roles: UserRole[];
+}
+
+interface PaginatedUsers {
+    items: User[];
+    page: number;
+    limit: number;
+    totalPages: number;
+    totalItems: number;
+}
+
+interface Branch {
+    id: number;
+    name: string;
+    isActive: boolean;
+}
+
+interface PaginatedBranches {
+    items: Branch[];
+    page: number;
+    limit: number;
+    totalPages: number;
+    totalItems: number;
+}
+
+interface Post {
+    id: number;
+    title: string;
+    isPublished: boolean;
+    publishedAt?: string;
+}
+
+interface PaginatedPosts {
+    items: Post[];
+    totalItems: number;
+}
+
+interface DashboardStats {
+    totalUsers: number;
+    activeUsers: number;
+    lockedUsers: number;
+    adminUsers: number;
+    totalBranches: number;
+    activeBranches: number;
+    totalPosts: number;
+}
+
+interface RecentActivity {
+    id: number;
+    action: string;
+    detail: string;
+    time: string;
+    emoji: string;
+}
+
+const quickActions = [
+    { label: 'Tạo bài viết', emoji: '✏️', href: '/posts/create' },
+    { label: 'Thêm User', emoji: '👤', href: '/users' },
+    { label: 'Chi nhánh mới', emoji: '🏢', href: '/branches/create' },
+    { label: 'Xem bài viết', emoji: '📊', href: '/posts' },
 ];
 
 export default function DashboardPage() {
     const [mounted, setMounted] = useState(false);
+    const [currentTime, setCurrentTime] = useState('');
+    const [stats, setStats] = useState<DashboardStats>({
+        totalUsers: 0,
+        activeUsers: 0,
+        lockedUsers: 0,
+        adminUsers: 0,
+        totalBranches: 0,
+        activeBranches: 0,
+        totalPosts: 0,
+    });
+    const [loading, setLoading] = useState(true);
+    const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
 
     useEffect(() => {
         setMounted(true);
+        const updateTime = () => {
+            const now = new Date();
+            setCurrentTime(now.toLocaleString('vi-VN', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            }));
+        };
+        updateTime();
+        const interval = setInterval(updateTime, 60000);
+        return () => clearInterval(interval);
     }, []);
 
+    const fetchDashboardData = useCallback(async () => {
+        try {
+            setLoading(true);
+
+            let totalUsers = 0, activeUsers = 0, lockedUsers = 0, adminUsers = 0;
+            let totalBranches = 0, activeBranches = 0;
+            let totalPosts = 0;
+            const activities: RecentActivity[] = [];
+            const now = new Date();
+
+            // Fetch Users - using EXACT same endpoint as UsersPage
+            try {
+                const usersRes = await apiClient.get<PaginatedUsers>('/admin/users?limit=50');
+                const users = usersRes.data.items || [];
+                totalUsers = users.length;
+                lockedUsers = users.filter(u => u.lockUntil && new Date(u.lockUntil) > now).length;
+                activeUsers = totalUsers - lockedUsers;
+                adminUsers = users.filter(u => u.roles?.some(r => r.name === 'admin' || r.name === 'super_admin')).length;
+
+                // Add user activities
+                users.slice(0, 2).forEach((user, i) => {
+                    activities.push({
+                        id: i + 1,
+                        action: 'User đã đăng ký',
+                        detail: user.email,
+                        time: 'Gần đây',
+                        emoji: '👤',
+                    });
+                });
+            } catch (err) {
+                console.log('Users API error:', err);
+            }
+
+            // Fetch Branches - using EXACT same endpoint as BranchesPage
+            try {
+                const branchesRes = await apiClient.get<PaginatedBranches>('/branches?limit=100');
+                const branches = branchesRes.data.items || [];
+                totalBranches = branches.length;
+                activeBranches = branches.filter(b => b.isActive).length;
+
+                // Add branch activities
+                branches.slice(0, 2).forEach((branch, i) => {
+                    activities.push({
+                        id: 10 + i,
+                        action: 'Chi nhánh',
+                        detail: branch.name,
+                        time: branch.isActive ? 'Đang hoạt động' : 'Tạm đóng',
+                        emoji: '🏢',
+                    });
+                });
+            } catch (err) {
+                console.log('Branches API error:', err);
+            }
+
+            // Fetch Posts - using EXACT same endpoint as PostsPage (/cms/posts)
+            try {
+                const postsRes = await apiClient.get<PaginatedPosts>('/cms/posts?limit=50');
+                const posts = postsRes.data.items || [];
+                totalPosts = posts.length;
+
+                // Add post activities
+                posts.slice(0, 3).forEach((post, i) => {
+                    activities.push({
+                        id: 20 + i,
+                        action: 'Bài viết',
+                        detail: post.title?.substring(0, 35) + (post.title?.length > 35 ? '...' : ''),
+                        time: post.publishedAt ? new Date(post.publishedAt).toLocaleDateString('vi-VN') : 'Nháp',
+                        emoji: '📝',
+                    });
+                });
+            } catch (err) {
+                console.log('Posts API error:', err);
+            }
+
+            setStats({
+                totalUsers,
+                activeUsers,
+                lockedUsers,
+                adminUsers,
+                totalBranches,
+                activeBranches,
+                totalPosts,
+            });
+
+            setRecentActivity(activities.length > 0 ? activities : [
+                { id: 1, action: 'Chào mừng', detail: 'Dashboard đã sẵn sàng', time: 'Bây giờ', emoji: '🎉' }
+            ]);
+        } catch (error) {
+            console.error('Dashboard fetch error:', error);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchDashboardData();
+    }, [fetchDashboardData]);
+
+    const statsConfig = [
+        {
+            label: 'Tổng Users',
+            value: stats.totalUsers,
+            subLabel: `${stats.activeUsers} active • ${stats.lockedUsers} locked`,
+            emoji: '👥',
+            color: '#7c3aed',
+            href: '/users',
+        },
+        {
+            label: 'Chi nhánh',
+            value: stats.totalBranches,
+            subLabel: `${stats.activeBranches} đang hoạt động`,
+            emoji: '🏢',
+            color: '#06b6d4',
+            href: '/branches',
+        },
+        {
+            label: 'Bài viết',
+            value: stats.totalPosts,
+            subLabel: 'Tổng số bài',
+            emoji: '📝',
+            color: '#10b981',
+            href: '/posts',
+        },
+        {
+            label: 'Admins',
+            value: stats.adminUsers,
+            subLabel: 'Quản trị viên',
+            emoji: '👑',
+            color: '#f97316',
+            href: '/users',
+        },
+    ];
+
     return (
-        <div style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
-            {/* Header */}
-            <div style={{ marginBottom: '2.5rem' }}>
-                <h1 style={{
-                    fontSize: '2.25rem',
-                    fontWeight: 800,
-                    color: '#f1f5f9',
-                    letterSpacing: '-0.025em',
-                    marginBottom: '0.5rem'
-                }}>
-                    Dashboard
-                </h1>
-                <p style={{ color: '#64748b', fontSize: '1rem' }}>
-                    Welcome back! Here's what's happening with your platform today.
-                </p>
-            </div>
-
-            {/* Stats Grid */}
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-                gap: '1.5rem',
-                marginBottom: '2.5rem'
-            }}>
-                {stats.map((stat, index) => (
-                    <div
-                        key={stat.label}
-                        style={{
-                            background: '#1e293b',
-                            borderRadius: '16px',
-                            padding: '1.5rem',
-                            border: '1px solid #334155',
-                            position: 'relative',
-                            overflow: 'hidden',
-                            transition: 'transform 0.2s, box-shadow 0.2s',
-                            opacity: mounted ? 1 : 0,
-                            transform: mounted ? 'translateY(0)' : 'translateY(20px)',
-                            transitionDelay: `${index * 100}ms`,
-                        }}
-                    >
-                        {/* Gradient accent */}
-                        <div style={{
-                            position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            height: '4px',
-                            background: stat.gradient,
-                        }} />
-
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                            <div>
-                                <p style={{
-                                    color: '#94a3b8',
-                                    fontSize: '0.875rem',
-                                    fontWeight: 500,
-                                    marginBottom: '0.5rem'
-                                }}>
-                                    {stat.label}
-                                </p>
-                                <p style={{
-                                    fontSize: '2.5rem',
-                                    fontWeight: 700,
-                                    color: '#f1f5f9',
-                                    lineHeight: 1
-                                }}>
-                                    {stat.value}
-                                </p>
-                            </div>
-                            <div style={{
-                                width: '48px',
-                                height: '48px',
-                                borderRadius: '12px',
+        <div style={{
+            minHeight: '100vh',
+            background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)',
+            padding: '24px',
+        }}>
+            <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
+                {/* Header */}
+                <div style={{ marginBottom: '32px' }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
+                        <div>
+                            <h1 style={{ fontSize: '28px', fontWeight: 700, color: '#f1f5f9', marginBottom: '8px' }}>
+                                Welcome back, Admin! 👋
+                            </h1>
+                            <p style={{ color: '#64748b', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{
+                                    width: '8px',
+                                    height: '8px',
+                                    backgroundColor: loading ? '#f97316' : '#10b981',
+                                    borderRadius: '50%',
+                                    display: 'inline-block',
+                                }} />
+                                {loading ? 'Đang tải dữ liệu...' : currentTime}
+                            </p>
+                        </div>
+                        <div style={{ display: 'flex', gap: '12px' }}>
+                            <Link href="/posts" style={{
+                                padding: '10px 16px',
                                 background: 'rgba(255,255,255,0.05)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: '1.5rem'
+                                border: '1px solid rgba(255,255,255,0.1)',
+                                borderRadius: '12px',
+                                color: '#94a3b8',
+                                fontSize: '14px',
+                                fontWeight: 500,
+                                textDecoration: 'none',
                             }}>
-                                {stat.icon}
-                            </div>
-                        </div>
-
-                        <div style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <span style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                padding: '0.25rem 0.5rem',
-                                borderRadius: '6px',
-                                fontSize: '0.75rem',
-                                fontWeight: 600,
-                                background: stat.positive ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-                                color: stat.positive ? '#10b981' : '#ef4444',
+                                📋 Quản lý bài viết
+                            </Link>
+                            <Link href="/posts/create" style={{
+                                padding: '10px 16px',
+                                background: 'linear-gradient(135deg, #7c3aed, #4f46e5)',
+                                borderRadius: '12px',
+                                color: 'white',
+                                fontSize: '14px',
+                                fontWeight: 500,
+                                textDecoration: 'none',
                             }}>
-                                {stat.positive ? '↑' : '↓'} {stat.change}
-                            </span>
-                            <span style={{ color: '#64748b', fontSize: '0.75rem' }}>vs last month</span>
+                                ➕ Tạo bài viết mới
+                            </Link>
                         </div>
-                    </div>
-                ))}
-            </div>
-
-            {/* Two Column Layout */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-                {/* Recent Activity */}
-                <div style={{
-                    background: '#1e293b',
-                    borderRadius: '16px',
-                    border: '1px solid #334155',
-                    overflow: 'hidden'
-                }}>
-                    <div style={{
-                        padding: '1.25rem 1.5rem',
-                        borderBottom: '1px solid #334155',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center'
-                    }}>
-                        <h2 style={{ fontSize: '1.125rem', fontWeight: 600, color: '#f1f5f9' }}>
-                            Recent Activity
-                        </h2>
-                        <button style={{
-                            color: '#10b981',
-                            fontSize: '0.875rem',
-                            fontWeight: 500,
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer'
-                        }}>
-                            View all →
-                        </button>
-                    </div>
-                    <div>
-                        {recentActivity.map((activity, index) => (
-                            <div
-                                key={activity.id}
-                                style={{
-                                    padding: '1rem 1.5rem',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '1rem',
-                                    borderBottom: index < recentActivity.length - 1 ? '1px solid #334155' : 'none',
-                                    transition: 'background 0.2s',
-                                }}
-                            >
-                                <div style={{
-                                    width: '40px',
-                                    height: '40px',
-                                    borderRadius: '10px',
-                                    background: '#0f172a',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    fontSize: '1.125rem'
-                                }}>
-                                    {activity.icon}
-                                </div>
-                                <div style={{ flex: 1 }}>
-                                    <p style={{ color: '#f1f5f9', fontSize: '0.875rem', fontWeight: 500 }}>
-                                        {activity.action}
-                                    </p>
-                                    <p style={{ color: '#64748b', fontSize: '0.75rem' }}>
-                                        {activity.user}
-                                    </p>
-                                </div>
-                                <span style={{ color: '#64748b', fontSize: '0.75rem' }}>
-                                    {activity.time}
-                                </span>
-                            </div>
-                        ))}
                     </div>
                 </div>
 
-                {/* Quick Actions */}
+                {/* Stats Grid */}
                 <div style={{
-                    background: '#1e293b',
-                    borderRadius: '16px',
-                    border: '1px solid #334155',
-                    overflow: 'hidden'
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(4, 1fr)',
+                    gap: '20px',
+                    marginBottom: '32px',
                 }}>
+                    {statsConfig.map((stat, index) => (
+                        <Link
+                            key={stat.label}
+                            href={stat.href}
+                            style={{
+                                position: 'relative',
+                                background: 'linear-gradient(135deg, rgba(30,41,59,0.9), rgba(15,23,42,0.95))',
+                                borderRadius: '16px',
+                                padding: '24px',
+                                border: '1px solid rgba(255,255,255,0.05)',
+                                textDecoration: 'none',
+                                display: 'block',
+                                opacity: mounted ? 1 : 0,
+                                transform: mounted ? 'translateY(0)' : 'translateY(20px)',
+                                transition: 'all 0.4s ease',
+                                transitionDelay: `${index * 80}ms`,
+                            }}
+                        >
+                            {/* Top line */}
+                            <div style={{
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                height: '3px',
+                                background: `linear-gradient(90deg, ${stat.color}, ${stat.color}88)`,
+                            }} />
+
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                <div>
+                                    <p style={{ color: '#94a3b8', fontSize: '14px', fontWeight: 500, marginBottom: '8px' }}>
+                                        {stat.label}
+                                    </p>
+                                    <p style={{ fontSize: '42px', fontWeight: 700, color: '#f1f5f9', lineHeight: 1 }}>
+                                        {loading ? '...' : stat.value}
+                                    </p>
+                                    <p style={{ marginTop: '12px', color: '#10b981', fontSize: '13px', fontWeight: 500 }}>
+                                        ✓ {stat.subLabel}
+                                    </p>
+                                </div>
+                                <div style={{
+                                    width: '52px',
+                                    height: '52px',
+                                    borderRadius: '14px',
+                                    background: `${stat.color}20`,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: '26px',
+                                }}>
+                                    {stat.emoji}
+                                </div>
+                            </div>
+                        </Link>
+                    ))}
+                </div>
+
+                {/* Main Content Grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px' }}>
+                    {/* Recent Activity */}
                     <div style={{
-                        padding: '1.25rem 1.5rem',
-                        borderBottom: '1px solid #334155'
+                        background: 'linear-gradient(135deg, rgba(30,41,59,0.9), rgba(15,23,42,0.95))',
+                        borderRadius: '16px',
+                        border: '1px solid rgba(255,255,255,0.05)',
                     }}>
-                        <h2 style={{ fontSize: '1.125rem', fontWeight: 600, color: '#f1f5f9' }}>
-                            Quick Actions
-                        </h2>
+                        <div style={{
+                            padding: '20px 24px',
+                            borderBottom: '1px solid rgba(255,255,255,0.05)',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                        }}>
+                            <div>
+                                <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#f1f5f9' }}>Hoạt động gần đây</h2>
+                                <p style={{ color: '#64748b', fontSize: '13px', marginTop: '4px' }}>Dữ liệu thực từ hệ thống</p>
+                            </div>
+                            <button onClick={() => fetchDashboardData()} style={{
+                                padding: '8px 16px',
+                                background: 'rgba(124, 58, 237, 0.2)',
+                                border: 'none',
+                                borderRadius: '8px',
+                                color: '#a78bfa',
+                                fontSize: '13px',
+                                fontWeight: 500,
+                                cursor: 'pointer',
+                            }}>
+                                🔄 Refresh
+                            </button>
+                        </div>
+                        <div>
+                            {loading ? (
+                                <div style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
+                                    Đang tải dữ liệu...
+                                </div>
+                            ) : recentActivity.length > 0 ? (
+                                recentActivity.map((activity) => (
+                                    <div key={activity.id} style={{
+                                        padding: '16px 24px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '16px',
+                                        borderBottom: '1px solid rgba(255,255,255,0.03)',
+                                    }}>
+                                        <div style={{
+                                            width: '44px',
+                                            height: '44px',
+                                            borderRadius: '12px',
+                                            background: 'rgba(16, 185, 129, 0.15)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            fontSize: '20px',
+                                        }}>
+                                            {activity.emoji}
+                                        </div>
+                                        <div style={{ flex: 1 }}>
+                                            <p style={{ color: '#f1f5f9', fontSize: '14px', fontWeight: 500 }}>
+                                                {activity.action}
+                                            </p>
+                                            <p style={{ color: '#64748b', fontSize: '13px', marginTop: '2px' }}>
+                                                {activity.detail}
+                                            </p>
+                                        </div>
+                                        <span style={{ color: '#64748b', fontSize: '13px' }}>
+                                            {activity.time}
+                                        </span>
+                                    </div>
+                                ))
+                            ) : (
+                                <div style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
+                                    Chưa có dữ liệu
+                                </div>
+                            )}
+                        </div>
                     </div>
-                    <div style={{ padding: '1.5rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                        {[
-                            { label: 'Create Post', icon: '✏️', color: '#10b981' },
-                            { label: 'Add User', icon: '👤', color: '#6366f1' },
-                            { label: 'New Branch', icon: '🏢', color: '#f59e0b' },
-                            { label: 'View Reports', icon: '📊', color: '#ec4899' },
-                        ].map((action) => (
-                            <button
-                                key={action.label}
-                                style={{
-                                    padding: '1.25rem',
-                                    background: '#0f172a',
-                                    border: '1px solid #334155',
-                                    borderRadius: '12px',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s',
+
+                    {/* Quick Actions */}
+                    <div style={{
+                        background: 'linear-gradient(135deg, rgba(30,41,59,0.9), rgba(15,23,42,0.95))',
+                        borderRadius: '16px',
+                        border: '1px solid rgba(255,255,255,0.05)',
+                    }}>
+                        <div style={{ padding: '20px 24px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                            <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#f1f5f9' }}>Thao tác nhanh</h2>
+                        </div>
+                        <div style={{ padding: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                            {quickActions.map((action) => (
+                                <Link key={action.label} href={action.href} style={{
                                     display: 'flex',
                                     flexDirection: 'column',
                                     alignItems: 'center',
-                                    gap: '0.75rem'
-                                }}
-                            >
-                                <span style={{ fontSize: '1.5rem' }}>{action.icon}</span>
-                                <span style={{ color: '#f1f5f9', fontSize: '0.875rem', fontWeight: 500 }}>
-                                    {action.label}
-                                </span>
-                            </button>
-                        ))}
+                                    gap: '12px',
+                                    padding: '20px 16px',
+                                    background: 'rgba(15,23,42,0.5)',
+                                    border: '1px solid rgba(255,255,255,0.05)',
+                                    borderRadius: '12px',
+                                    textDecoration: 'none',
+                                }}>
+                                    <span style={{ fontSize: '28px' }}>{action.emoji}</span>
+                                    <span style={{ color: '#94a3b8', fontSize: '14px', fontWeight: 500 }}>
+                                        {action.label}
+                                    </span>
+                                </Link>
+                            ))}
+                        </div>
+
+                        {/* System Status */}
+                        <div style={{ padding: '16px' }}>
+                            <div style={{
+                                background: 'rgba(16, 185, 129, 0.1)',
+                                border: '1px solid rgba(16, 185, 129, 0.2)',
+                                borderRadius: '12px',
+                                padding: '16px',
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                                    <div style={{
+                                        width: '10px',
+                                        height: '10px',
+                                        backgroundColor: '#10b981',
+                                        borderRadius: '50%',
+                                        boxShadow: '0 0 10px #10b981',
+                                    }} />
+                                    <span style={{ color: '#10b981', fontSize: '14px', fontWeight: 600 }}>
+                                        Hệ thống hoạt động
+                                    </span>
+                                </div>
+                                <p style={{ color: 'rgba(16, 185, 129, 0.7)', fontSize: '12px' }}>
+                                    {stats.totalUsers} users • {stats.totalBranches} branches • {stats.totalPosts} posts
+                                </p>
+                            </div>
+                        </div>
                     </div>
+                </div>
+
+                {/* Footer */}
+                <div style={{ marginTop: '32px', textAlign: 'center', color: '#64748b', fontSize: '13px' }}>
+                    <p>Laba Platform v1.0 • Phase 1 Complete 🎉</p>
                 </div>
             </div>
         </div>

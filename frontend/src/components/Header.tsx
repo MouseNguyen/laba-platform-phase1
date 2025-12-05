@@ -88,7 +88,7 @@ export default function Header() {
             Cafe
           </Link>
           <Link
-            href="/#section-about"
+            href="/about"
             style={{
               fontSize: '0.875rem',
               color: '#94a3b8',

@@ -9,9 +9,9 @@ export type PostType = (typeof POST_TYPES)[number];
 
 // For Swagger UI
 export enum PostTypeEnum {
-    PAGE = 'PAGE',
-    BLOG = 'BLOG',
-    NEWS = 'NEWS',
+  PAGE = 'PAGE',
+  BLOG = 'BLOG',
+  NEWS = 'NEWS',
 }
 
 // registerEnumType is not exported in some versions or requires specific setup.

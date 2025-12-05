@@ -1,15 +1,25 @@
+// backend/src/users-admin/users-admin.module.ts
 import { Module } from '@nestjs/common';
+
+import { PrismaModule } from '../prisma/prisma.module';
+
 import { UsersAdminController } from './users-admin.controller';
 import { UsersAdminService } from './users-admin.service';
-import { PrismaService } from '../prisma/prisma.service';
 
+/**
+ * Users Admin Module
+ * Provides admin endpoints for user management
+ * Features:
+ * - List users with pagination, search, filter
+ * - Create new users with temp password
+ * - Lock/unlock user accounts
+ * - Update user roles
+ * - User statistics
+ */
 @Module({
-    controllers: [UsersAdminController],
-    providers: [
-        UsersAdminService,
-        PrismaService,
-        // TODO: Add lock/unlock, assign roles, assign to branch logic
-    ],
-    exports: [UsersAdminService],
+  imports: [PrismaModule],
+  providers: [UsersAdminService],
+  controllers: [UsersAdminController],
+  exports: [UsersAdminService],
 })
-export class UsersAdminModule { }
+export class UsersAdminModule {}

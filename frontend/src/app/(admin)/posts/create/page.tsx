@@ -20,8 +20,12 @@ export default function CreatePostPage() {
         isPublished: false,
     });
 
-    const [thumbnail, setThumbnail] = useState<File | null>(null);
+    // Thumbnail state - support both file upload and URL input
+    const [thumbnailMode, setThumbnailMode] = useState<'file' | 'url'>('file');
+    const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
+    const [thumbnailUrl, setThumbnailUrl] = useState<string>('');
     const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
+    const [uploadError, setUploadError] = useState<string | null>(null);
 
     const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
@@ -42,11 +46,29 @@ export default function CreatePostPage() {
         setFormData((prev) => ({ ...prev, [name]: checked }));
     };
 
-    const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
             const file = e.target.files[0];
-            setThumbnail(file);
+            setThumbnailFile(file);
             setThumbnailPreview(URL.createObjectURL(file));
+            setUploadError(null);
+        }
+    };
+
+    const handleUrlChange = (e: ChangeEvent<HTMLInputElement>) => {
+        const url = e.target.value;
+        setThumbnailUrl(url);
+        setThumbnailPreview(url || null);
+        setUploadError(null);
+    };
+
+    const handleModeChange = (mode: 'file' | 'url') => {
+        setThumbnailMode(mode);
+        setUploadError(null);
+        if (mode === 'file') {
+            setThumbnailPreview(thumbnailFile ? URL.createObjectURL(thumbnailFile) : null);
+        } else {
+            setThumbnailPreview(thumbnailUrl || null);
         }
     };
 
@@ -54,12 +76,25 @@ export default function CreatePostPage() {
         e.preventDefault();
         setIsLoading(true);
         setError(null);
+        setUploadError(null);
 
         try {
-            let thumbnailUrl = '';
-            if (thumbnail) {
-                const uploadRes = await postsApi.uploadImage(thumbnail);
-                thumbnailUrl = uploadRes.url;
+            let finalThumbnailUrl: string | undefined = undefined;
+
+            if (thumbnailMode === 'file' && thumbnailFile) {
+                // Upload file first
+                try {
+                    const uploadRes = await postsApi.uploadImage(thumbnailFile);
+                    finalThumbnailUrl = uploadRes.url;
+                } catch (uploadErr: any) {
+                    console.error('Upload failed:', uploadErr);
+                    setUploadError(uploadErr.response?.data?.message || 'Upload ảnh thất bại. Kiểm tra đăng nhập hoặc thử lại.');
+                    setIsLoading(false);
+                    return;
+                }
+            } else if (thumbnailMode === 'url' && thumbnailUrl) {
+                // Use the provided URL directly
+                finalThumbnailUrl = thumbnailUrl;
             }
 
             await postsApi.create({
@@ -68,7 +103,7 @@ export default function CreatePostPage() {
                 excerpt: formData.excerpt,
                 type: formData.type,
                 isPublished: formData.isPublished,
-                thumbnailUrl: thumbnailUrl || undefined,
+                thumbnailUrl: finalThumbnailUrl,
                 content: {
                     blocks: [
                         {
@@ -76,13 +111,18 @@ export default function CreatePostPage() {
                             data: { text: formData.content }
                         }
                     ]
-                }, // Simple wrapper for now
+                },
             });
 
             router.push('/posts');
         } catch (err: any) {
             console.error('Failed to create post:', err);
-            setError(err.response?.data?.message || 'Failed to create post');
+            const message = err.response?.data?.message;
+            if (Array.isArray(message)) {
+                setError(message.join(', '));
+            } else {
+                setError(message || 'Không thể tạo bài viết');
+            }
         } finally {
             setIsLoading(false);
         }
@@ -91,9 +131,9 @@ export default function CreatePostPage() {
     return (
         <div style={{ padding: '2rem', maxWidth: '800px', margin: '0 auto' }}>
             <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#f1f5f9' }}>Create New Post</h1>
+                <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#f1f5f9' }}>Tạo bài viết mới</h1>
                 <Link href="/posts" style={{ color: '#94a3b8', textDecoration: 'none' }}>
-                    ← Back to Posts
+                    ← Quay lại
                 </Link>
             </div>
 
@@ -106,7 +146,7 @@ export default function CreatePostPage() {
             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                 {/* Title */}
                 <div>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', color: '#cbd5e1' }}>Title</label>
+                    <label style={{ display: 'block', marginBottom: '0.5rem', color: '#cbd5e1' }}>Tiêu đề</label>
                     <input
                         type="text"
                         name="title"
@@ -132,7 +172,7 @@ export default function CreatePostPage() {
 
                 {/* Type */}
                 <div>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', color: '#cbd5e1' }}>Type</label>
+                    <label style={{ display: 'block', marginBottom: '0.5rem', color: '#cbd5e1' }}>Loại</label>
                     <select
                         name="type"
                         value={formData.type}
@@ -140,8 +180,8 @@ export default function CreatePostPage() {
                         style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', background: 'rgba(30, 41, 59, 0.5)', border: '1px solid rgba(71, 85, 105, 0.5)', color: '#fff' }}
                     >
                         <option value={PostTypeEnum.BLOG}>Blog</option>
-                        <option value={PostTypeEnum.NEWS}>News</option>
-                        <option value={PostTypeEnum.PAGE}>Page</option>
+                        <option value={PostTypeEnum.NEWS}>Tin tức</option>
+                        <option value={PostTypeEnum.PAGE}>Trang</option>
                     </select>
                 </div>
 
@@ -155,18 +195,76 @@ export default function CreatePostPage() {
                         onChange={handleCheckboxChange}
                         style={{ width: '1.25rem', height: '1.25rem' }}
                     />
-                    <label htmlFor="isPublished" style={{ color: '#cbd5e1', cursor: 'pointer' }}>Publish immediately</label>
+                    <label htmlFor="isPublished" style={{ color: '#cbd5e1', cursor: 'pointer' }}>Xuất bản ngay</label>
                 </div>
 
-                {/* Thumbnail */}
+                {/* Thumbnail - Mode Selector */}
                 <div>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', color: '#cbd5e1' }}>Thumbnail Image</label>
-                    <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleImageChange}
-                        style={{ color: '#cbd5e1' }}
-                    />
+                    <label style={{ display: 'block', marginBottom: '0.5rem', color: '#cbd5e1' }}>Ảnh đại diện</label>
+
+                    {/* Mode Toggle */}
+                    <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+                        <button
+                            type="button"
+                            onClick={() => handleModeChange('file')}
+                            style={{
+                                padding: '0.5rem 1rem',
+                                borderRadius: '6px',
+                                border: 'none',
+                                cursor: 'pointer',
+                                background: thumbnailMode === 'file' ? '#10b981' : 'rgba(71, 85, 105, 0.5)',
+                                color: thumbnailMode === 'file' ? '#020617' : '#cbd5e1',
+                                fontWeight: 500,
+                            }}
+                        >
+                            📁 Upload file
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleModeChange('url')}
+                            style={{
+                                padding: '0.5rem 1rem',
+                                borderRadius: '6px',
+                                border: 'none',
+                                cursor: 'pointer',
+                                background: thumbnailMode === 'url' ? '#10b981' : 'rgba(71, 85, 105, 0.5)',
+                                color: thumbnailMode === 'url' ? '#020617' : '#cbd5e1',
+                                fontWeight: 500,
+                            }}
+                        >
+                            🔗 Nhập URL
+                        </button>
+                    </div>
+
+                    {/* File Upload Mode */}
+                    {thumbnailMode === 'file' && (
+                        <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleFileChange}
+                            style={{ color: '#cbd5e1' }}
+                        />
+                    )}
+
+                    {/* URL Input Mode */}
+                    {thumbnailMode === 'url' && (
+                        <input
+                            type="url"
+                            placeholder="https://example.com/image.jpg"
+                            value={thumbnailUrl}
+                            onChange={handleUrlChange}
+                            style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', background: 'rgba(30, 41, 59, 0.5)', border: '1px solid rgba(71, 85, 105, 0.5)', color: '#fff' }}
+                        />
+                    )}
+
+                    {/* Upload Error */}
+                    {uploadError && (
+                        <div style={{ marginTop: '0.5rem', padding: '0.5rem', background: 'rgba(239, 68, 68, 0.1)', color: '#f87171', borderRadius: '4px', fontSize: '0.875rem' }}>
+                            ⚠️ {uploadError}
+                        </div>
+                    )}
+
+                    {/* Preview */}
                     {thumbnailPreview && (
                         <div style={{ marginTop: '1rem' }}>
                             <img src={thumbnailPreview} alt="Preview" style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '8px' }} />
@@ -176,7 +274,7 @@ export default function CreatePostPage() {
 
                 {/* Excerpt */}
                 <div>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', color: '#cbd5e1' }}>Excerpt</label>
+                    <label style={{ display: 'block', marginBottom: '0.5rem', color: '#cbd5e1' }}>Mô tả ngắn</label>
                     <textarea
                         name="excerpt"
                         value={formData.excerpt}
@@ -188,7 +286,7 @@ export default function CreatePostPage() {
 
                 {/* Content */}
                 <div>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', color: '#cbd5e1' }}>Content</label>
+                    <label style={{ display: 'block', marginBottom: '0.5rem', color: '#cbd5e1' }}>Nội dung</label>
                     <textarea
                         name="content"
                         value={formData.content}
@@ -212,7 +310,7 @@ export default function CreatePostPage() {
                         cursor: isLoading ? 'not-allowed' : 'pointer',
                     }}
                 >
-                    {isLoading ? 'Creating...' : 'Create Post'}
+                    {isLoading ? 'Đang tạo...' : 'Tạo bài viết'}
                 </button>
             </form>
         </div>

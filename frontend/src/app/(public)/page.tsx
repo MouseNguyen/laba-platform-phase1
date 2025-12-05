@@ -409,6 +409,193 @@ function ContentSection({
 }
 
 // =============================================
+// Blog Section Component (Fetches from API)
+// =============================================
+interface BlogPost {
+  id: number;
+  slug: string;
+  title: string;
+  excerpt?: string;
+  thumbnailUrl?: string;
+  type: string;
+  publishedAt?: string;
+}
+
+async function getBlogPosts(): Promise<BlogPost[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/posts?type=BLOG&limit=6`, {
+      cache: 'no-store',
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.items || [];
+  } catch {
+    return [];
+  }
+}
+
+async function BlogSection() {
+  const posts = await getBlogPosts();
+
+  if (posts.length === 0) return null;
+
+  return (
+    <section
+      id="section-blog"
+      style={{
+        padding: '6rem 1.5rem',
+        background: '#0f172a',
+      }}
+    >
+      <div
+        style={{
+          maxWidth: '1100px',
+          margin: '0 auto',
+        }}
+      >
+        {/* Header */}
+        <div style={{ textAlign: 'center', marginBottom: '4rem' }}>
+          <span
+            style={{
+              display: 'inline-block',
+              padding: '0.5rem 1rem',
+              background: 'rgba(16, 185, 129, 0.1)',
+              color: '#10b981',
+              borderRadius: '9999px',
+              fontSize: '0.875rem',
+              fontWeight: 600,
+              marginBottom: '1rem',
+            }}
+          >
+            📝 Latest Blog
+          </span>
+          <h2
+            style={{
+              fontSize: '2.5rem',
+              fontWeight: 700,
+              color: '#f1f5f9',
+              marginBottom: '1rem',
+            }}
+          >
+            Bài viết mới nhất
+          </h2>
+          <p style={{ fontSize: '1.125rem', color: '#94a3b8', maxWidth: '600px', margin: '0 auto' }}>
+            Khám phá các câu chuyện, mẹo và tin tức từ Laba
+          </p>
+        </div>
+
+        {/* Posts Grid */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+            gap: '2rem',
+          }}
+        >
+          {posts.map((post) => (
+            <Link
+              key={post.id}
+              href={`/blog/${post.slug}`}
+              style={{
+                display: 'block',
+                background: 'rgba(30, 41, 59, 0.5)',
+                borderRadius: '16px',
+                overflow: 'hidden',
+                border: '1px solid rgba(51, 65, 85, 0.5)',
+                textDecoration: 'none',
+                transition: 'transform 0.2s, box-shadow 0.2s',
+              }}
+            >
+              {/* Thumbnail */}
+              <div
+                style={{
+                  aspectRatio: '16/9',
+                  background: post.thumbnailUrl
+                    ? `url(${post.thumbnailUrl}) center/cover`
+                    : 'linear-gradient(135deg, #1e293b 0%, #334155 100%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                {!post.thumbnailUrl && (
+                  <span style={{ fontSize: '3rem' }}>📝</span>
+                )}
+              </div>
+
+              {/* Content */}
+              <div style={{ padding: '1.5rem' }}>
+                <span
+                  style={{
+                    display: 'inline-block',
+                    padding: '0.25rem 0.75rem',
+                    background: 'rgba(16, 185, 129, 0.1)',
+                    color: '#10b981',
+                    borderRadius: '4px',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    marginBottom: '0.75rem',
+                  }}
+                >
+                  {post.type}
+                </span>
+                <h3
+                  style={{
+                    fontSize: '1.25rem',
+                    fontWeight: 600,
+                    color: '#f1f5f9',
+                    marginBottom: '0.5rem',
+                    lineHeight: 1.4,
+                  }}
+                >
+                  {post.title}
+                </h3>
+                {post.excerpt && (
+                  <p
+                    style={{
+                      fontSize: '0.875rem',
+                      color: '#94a3b8',
+                      lineHeight: 1.6,
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {post.excerpt}
+                  </p>
+                )}
+              </div>
+            </Link>
+          ))}
+        </div>
+
+        {/* View All Button */}
+        <div style={{ textAlign: 'center', marginTop: '3rem' }}>
+          <Link
+            href="/blog"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              padding: '1rem 2rem',
+              background: '#10b981',
+              color: '#020617',
+              borderRadius: '12px',
+              fontSize: '1rem',
+              fontWeight: 600,
+              textDecoration: 'none',
+            }}
+          >
+            Xem tất cả bài viết →
+          </Link>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// =============================================
 // Error Component
 // =============================================
 function ErrorMessage() {
@@ -544,6 +731,9 @@ export default async function HomePage() {
             bgColor="#1e293b"
           />
         )}
+
+        {/* Blog Section */}
+        <BlogSection />
       </main>
 
       {/* Footer */}

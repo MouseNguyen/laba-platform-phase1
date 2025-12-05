@@ -23,23 +23,25 @@ Frontend sẽ chạy tại: http://localhost:3001
 frontend/
 ├── src/
 │   ├── app/                    # Next.js App Router
-│   │   ├── layout.tsx          # Root layout
-│   │   ├── page.tsx            # Landing page (placeholder)
+│   │   ├── (admin)/            # Admin Portal (Protected)
+│   │   │   ├── dashboard/
+│   │   │   ├── users/
+│   │   │   ├── posts/
+│   │   │   └── branches/
+│   │   ├── (public)/           # Public Website
+│   │   │   ├── blog/
+│   │   │   ├── about/
+│   │   │   └── page.tsx        # Landing page
 │   │   └── login/
-│   │       └── page.tsx        # Login page (placeholder)
+│   ├── components/             # Reusable Components
 │   ├── context/
-│   │   └── AuthContext.tsx     # Auth context (TODO: FE3)
+│   │   └── AuthContext.tsx     # Authentication Logic
 │   ├── lib/
-│   │   ├── apiClient.ts        # Axios instance
-│   │   └── types.ts            # TypeScript types
+│   │   ├── api/                # API Modules
+│   │   ├── apiClient.ts        # Axios Instance
+│   │   └── types.ts            # TypeScript Interfaces
 │   └── styles/
-│       └── globals.css         # Global styles
-├── public/                     # Static files
-├── .env.local.example          # Environment template
-├── next.config.mjs             # Next.js config
-├── package.json
-├── tsconfig.json
-└── README.md
+└── public/
 ```
 
 ## 🔧 Environment Variables
@@ -48,58 +50,39 @@ frontend/
 |----------|-------------|---------|
 | `NEXT_PUBLIC_API_BASE_URL` | Backend API URL | `http://localhost:3000` |
 
-## 📋 Scripts
+## 🎯 Phase 1 Features
 
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Chạy development server (port 3001) |
-| `npm run build` | Build production |
-| `npm run start` | Chạy production server |
-| `npm run lint` | Chạy ESLint |
+### 1. Public Website
+- **Landing Page**: Dynamic content blocks (Hero, Farm, Homestay, Cafe).
+- **Blog**: List & Detail pages for news and articles.
+- **About**: Company information.
+- **Contact**: Contact form (UI).
 
-## 🎯 Phase 1 Status
+### 2. Authentication
+- **Login**: Email/Password with Rate Limiting protection.
+- **Security**:
+    - JWT Access Token (Memory).
+    - Refresh Token (HttpOnly Cookie).
+    - Auto Refresh Token Rotation.
+    - Session Management (Revoke All).
 
-### ✅ FE1 - Khung cơ bản
-- [x] Next.js project setup
-- [x] TypeScript configuration
-- [x] Axios API client
-- [x] Type definitions
-- [x] Landing placeholder
-- [x] Login placeholder
-- [x] AuthContext placeholder
+### 3. Admin Portal
+- **Dashboard**: Overview.
+- **User Management**: List, Create, Edit, Delete users.
+- **Post Management**: CMS for Blogs/News with Rich Text & Image Upload.
+- **Branch Management**: Manage farm locations.
 
-### ✅ FE2 - Landing Page
-- [x] Fetch landing content từ API `/landing`
-- [x] Render các blocks (hero, farm, homestay, cafe, about)
-- [x] Navigation bar với anchor links
-- [x] Responsive layout
-- [x] Error handling khi API không khả dụng
-- [x] Image optimization với Next.js Image
-
-### ✅ FE3 - Authentication (Current)
-- [x] Login form với email/password
-- [x] AuthContext implementation
-- [x] Token storage trong memory
-- [x] Auto refresh token interceptor
-- [x] Handle 401 → refresh → retry
-- [x] Handle 403 SESSION_COMPROMISED
-- [x] Header với user info và logout
-- [x] Session restore on page refresh
-
-## 🔗 Backend API Endpoints
+## 🔗 Key API Endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/landing` | Lấy landing content |
-| POST | `/auth/login` | Đăng nhập |
-| GET | `/auth/me` | Lấy thông tin user |
-| POST | `/auth/refresh` | Làm mới access token |
-| POST | `/auth/logout` | Đăng xuất |
-| POST | `/auth/revoke-all` | Thu hồi tất cả sessions |
+| GET | `/api/v1/landing` | Public Landing Content |
+| GET | `/api/v1/posts` | Public Blog Posts |
+| POST | `/api/v1/auth/login` | Login |
+| GET | `/api/v1/cms/posts` | Admin Post Management |
+| POST | `/api/v1/cms/uploads/image` | Image Upload |
 
 ## 📝 Notes
 
-- Backend phải chạy trước ở port 3000
-- CORS đã được cấu hình cho http://localhost:3001
-- Refresh token được lưu trong HttpOnly cookie
-- Access token sẽ được lưu trong memory (React state)
+- Backend phải chạy trước ở port 3000.
+- CORS đã được cấu hình cho http://localhost:3001.

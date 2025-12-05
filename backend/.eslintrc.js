@@ -9,7 +9,7 @@ module.exports = {
     extends: [
         'plugin:@typescript-eslint/recommended',
         'plugin:prettier/recommended',
-        'plugin:security/recommended',
+        // 'plugin:security/recommended', // Tạm tắt do xung đột với ESLint 8 flat config
     ],
     root: true,
     env: {

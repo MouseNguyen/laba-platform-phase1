@@ -8,9 +8,12 @@
  */
 
 import { Module } from '@nestjs/common';
+
 import { PrismaModule } from '../prisma/prisma.module';
-import { PostsService } from './posts.service';
+
 import { PostsController } from './posts.controller';
+import { PostsService } from './posts.service';
+import { PublicPostsController } from './public-posts.controller';
 import { UploadController } from './upload.controller';
 
 /**
@@ -18,11 +21,9 @@ import { UploadController } from './upload.controller';
  * Provides endpoints for managing posts, pages, and other content
  */
 @Module({
-    imports: [
-        PrismaModule,
-    ],
-    providers: [PostsService],
-    controllers: [PostsController, UploadController],
-    exports: [PostsService],
+  imports: [PrismaModule],
+  providers: [PostsService],
+  controllers: [PostsController, PublicPostsController, UploadController],
+  exports: [PostsService],
 })
 export class CmsModule { }

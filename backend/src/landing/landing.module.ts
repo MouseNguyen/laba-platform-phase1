@@ -1,9 +1,10 @@
 import { Module } from '@nestjs/common';
-import { LandingService } from './landing.service';
+
 import { LandingController } from './landing.controller';
+import { LandingService } from './landing.service';
 
 @Module({
-    controllers: [LandingController],
-    providers: [LandingService],
+  controllers: [LandingController],
+  providers: [LandingService],
 })
-export class LandingModule { }
+export class LandingModule {}

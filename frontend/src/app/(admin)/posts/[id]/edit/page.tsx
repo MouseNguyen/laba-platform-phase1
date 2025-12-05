@@ -24,9 +24,12 @@ export default function EditPostPage() {
         isPublished: false,
     });
 
-    const [thumbnail, setThumbnail] = useState<File | null>(null);
+    // Thumbnail state - support both file upload and URL input
+    const [thumbnailMode, setThumbnailMode] = useState<'file' | 'url'>('file');
+    const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
+    const [thumbnailUrl, setThumbnailUrl] = useState<string>('');
     const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
-    const [existingThumbnail, setExistingThumbnail] = useState<string | null>(null);
+    const [uploadError, setUploadError] = useState<string | null>(null);
 
     useEffect(() => {
         const fetchPost = async () => {
@@ -41,8 +44,9 @@ export default function EditPostPage() {
                     isPublished: post.isPublished,
                 });
                 if (post.thumbnailUrl) {
-                    setExistingThumbnail(post.thumbnailUrl);
+                    setThumbnailUrl(post.thumbnailUrl);
                     setThumbnailPreview(post.thumbnailUrl);
+                    setThumbnailMode('url');
                 }
             } catch (err) {
                 console.error('Failed to fetch post:', err);
@@ -65,11 +69,29 @@ export default function EditPostPage() {
         setFormData((prev) => ({ ...prev, [name]: checked }));
     };
 
-    const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
             const file = e.target.files[0];
-            setThumbnail(file);
+            setThumbnailFile(file);
             setThumbnailPreview(URL.createObjectURL(file));
+            setUploadError(null);
+        }
+    };
+
+    const handleUrlChange = (e: ChangeEvent<HTMLInputElement>) => {
+        const url = e.target.value;
+        setThumbnailUrl(url);
+        setThumbnailPreview(url || null);
+        setUploadError(null);
+    };
+
+    const handleModeChange = (mode: 'file' | 'url') => {
+        setThumbnailMode(mode);
+        setUploadError(null);
+        if (mode === 'file') {
+            setThumbnailPreview(thumbnailFile ? URL.createObjectURL(thumbnailFile) : null);
+        } else {
+            setThumbnailPreview(thumbnailUrl || null);
         }
     };
 
@@ -77,12 +99,25 @@ export default function EditPostPage() {
         e.preventDefault();
         setIsSaving(true);
         setError(null);
+        setUploadError(null);
 
         try {
-            let thumbnailUrl = existingThumbnail || undefined;
-            if (thumbnail) {
-                const uploadRes = await postsApi.uploadImage(thumbnail);
-                thumbnailUrl = uploadRes.url;
+            let finalThumbnailUrl: string | undefined = undefined;
+
+            if (thumbnailMode === 'file' && thumbnailFile) {
+                // Upload file first
+                try {
+                    const uploadRes = await postsApi.uploadImage(thumbnailFile);
+                    finalThumbnailUrl = uploadRes.url;
+                } catch (uploadErr: any) {
+                    console.error('Upload failed:', uploadErr);
+                    setUploadError(uploadErr.response?.data?.message || 'Upload ảnh thất bại. Kiểm tra đăng nhập hoặc thử lại.');
+                    setIsSaving(false);
+                    return;
+                }
+            } else if (thumbnailMode === 'url' && thumbnailUrl) {
+                // Use the provided URL directly
+                finalThumbnailUrl = thumbnailUrl;
             }
 
             await postsApi.update(postId, {
@@ -91,7 +126,7 @@ export default function EditPostPage() {
                 excerpt: formData.excerpt,
                 type: formData.type,
                 isPublished: formData.isPublished,
-                thumbnailUrl: thumbnailUrl,
+                thumbnailUrl: finalThumbnailUrl,
                 content: {
                     blocks: [
                         {
@@ -105,7 +140,12 @@ export default function EditPostPage() {
             router.push('/posts');
         } catch (err: any) {
             console.error('Failed to update post:', err);
-            setError(err.response?.data?.message || 'Không thể cập nhật bài viết');
+            const message = err.response?.data?.message;
+            if (Array.isArray(message)) {
+                setError(message.join(', '));
+            } else {
+                setError(message || 'Không thể cập nhật bài viết');
+            }
         } finally {
             setIsSaving(false);
         }
@@ -185,15 +225,73 @@ export default function EditPostPage() {
                     <label htmlFor="isPublished" style={{ color: '#cbd5e1', cursor: 'pointer' }}>Đã xuất bản</label>
                 </div>
 
-                {/* Thumbnail */}
+                {/* Thumbnail - Mode Selector */}
                 <div>
                     <label style={{ display: 'block', marginBottom: '0.5rem', color: '#cbd5e1' }}>Ảnh đại diện</label>
-                    <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleImageChange}
-                        style={{ color: '#cbd5e1' }}
-                    />
+
+                    {/* Mode Toggle */}
+                    <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+                        <button
+                            type="button"
+                            onClick={() => handleModeChange('file')}
+                            style={{
+                                padding: '0.5rem 1rem',
+                                borderRadius: '6px',
+                                border: 'none',
+                                cursor: 'pointer',
+                                background: thumbnailMode === 'file' ? '#10b981' : 'rgba(71, 85, 105, 0.5)',
+                                color: thumbnailMode === 'file' ? '#020617' : '#cbd5e1',
+                                fontWeight: 500,
+                            }}
+                        >
+                            📁 Upload file
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleModeChange('url')}
+                            style={{
+                                padding: '0.5rem 1rem',
+                                borderRadius: '6px',
+                                border: 'none',
+                                cursor: 'pointer',
+                                background: thumbnailMode === 'url' ? '#10b981' : 'rgba(71, 85, 105, 0.5)',
+                                color: thumbnailMode === 'url' ? '#020617' : '#cbd5e1',
+                                fontWeight: 500,
+                            }}
+                        >
+                            🔗 Nhập URL
+                        </button>
+                    </div>
+
+                    {/* File Upload Mode */}
+                    {thumbnailMode === 'file' && (
+                        <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleFileChange}
+                            style={{ color: '#cbd5e1' }}
+                        />
+                    )}
+
+                    {/* URL Input Mode */}
+                    {thumbnailMode === 'url' && (
+                        <input
+                            type="url"
+                            placeholder="https://example.com/image.jpg"
+                            value={thumbnailUrl}
+                            onChange={handleUrlChange}
+                            style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', background: 'rgba(30, 41, 59, 0.5)', border: '1px solid rgba(71, 85, 105, 0.5)', color: '#fff' }}
+                        />
+                    )}
+
+                    {/* Upload Error */}
+                    {uploadError && (
+                        <div style={{ marginTop: '0.5rem', padding: '0.5rem', background: 'rgba(239, 68, 68, 0.1)', color: '#f87171', borderRadius: '4px', fontSize: '0.875rem' }}>
+                            ⚠️ {uploadError}
+                        </div>
+                    )}
+
+                    {/* Preview */}
                     {thumbnailPreview && (
                         <div style={{ marginTop: '1rem' }}>
                             <img src={thumbnailPreview} alt="Preview" style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '8px' }} />

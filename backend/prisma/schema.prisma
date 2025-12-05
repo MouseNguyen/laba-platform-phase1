@@ -111,19 +111,30 @@ model RolePermission {
   @@map("role_permissions")
 }
 
+// Branch Model - Multi-tenant support for Laba Platform
+// Each branch can be FARM, HOMESTAY, CAFE, or SHOP
+// Soft delete enabled for data retention
 model Branch {
-  id      Int     @id @default(autoincrement())
-  name    String
-  code    String? @unique
-  address String?
-  phone   String?
+  id         Int       @id @default(autoincrement())
+  code       String    @unique @db.VarChar(50) // Unique identifier for URLs/configs
+  name       String    @db.VarChar(255) // Display name
+  type       String    @db.VarChar(20) // FARM, HOMESTAY, CAFE, SHOP
+  address    String?   @db.VarChar(500) // Full address
+  phone      String?   @db.VarChar(30) // Contact phone with country code
+  settings   Json?     @db.JsonB // Branch-specific configuration (timezone, hours, etc.)
+  isActive   Boolean   @default(true) @map("is_active") // Enable/disable branch
 
-  created_at DateTime  @default(now())
-  updated_at DateTime  @updatedAt
-  deleted_at DateTime?
+  created_at DateTime  @default(now()) @db.Timestamptz()
+  updated_at DateTime  @updatedAt @db.Timestamptz()
+  deleted_at DateTime? @db.Timestamptz() // Soft delete
 
+  // Relations
   user_branches UserBranch[]
 
+  // Performance indexes
+  @@index([type, isActive]) // Common query: filter by type and active status
+  @@index([code]) // Already unique, but explicit for clarity
+  @@index([deleted_at]) // Soft delete queries
   @@map("branches")
 }
 
